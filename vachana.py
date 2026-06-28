@@ -185,6 +185,6 @@ if __name__ == "__main__":
     async def handle(text):
         # placeholder for now, later this calls intent detection db llm
         print(f"\nprogram received: {text}\n")
-        await asyncio.sleep(1)
+        await asyncio.sleep(10)
 
     asyncio.run(start_listening(handle))
