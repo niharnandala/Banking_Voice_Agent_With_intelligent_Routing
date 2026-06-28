@@ -1,0 +1,35 @@
+asyncio.run(main())
+        |
+        ▼
+main() opens WebSocket to Vachana
+        |
+        ▼
+main() turns on mic
+        |
+        ▼
+sounddevice starts calling mic_callback() every 512 samples
+        |
+        ▼
+mic_callback() drops chunks into the queue
+        |
+        ▼
+main() starts two workers together:
+        |                        |
+        ▼                        ▼
+send_audio()               receive()
+grabs chunk from queue     waits for Vachana
+    |                           |
+    ▼                           |
+to_int16()                      |
+converts format                 |
+    |                           |
+    ▼                           |
+sends bytes to Vachana          |
+    |                      Vachana gets audio
+    |                      detects you stopped
+    |                           |
+    |                           ▼
+    |                      receive() gets transcript
+    |                      prints what you said
+    |                           |
+loops again                loops again
