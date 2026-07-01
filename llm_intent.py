@@ -94,7 +94,7 @@ async def run_intent(conversation_history, text, retry_count=0):
     intent     = result.get("intent", "smalltalk")
     confidence = result.get("confidence", 0.0)
 
-    conversation_history.append({"role": "ai", "content": f"found intent: {intent}, confidence: {confidence}"})
+    conversation_history.append({"role": "assistant", "content": f"found intent: {intent}, confidence: {confidence}"})
     print(f"\nintent: {intent}, confidence: {confidence}\n")
 
     if intent == "personal" and confidence >= CONFIDENCE_THRESHOLD:
@@ -122,7 +122,7 @@ async def run_intent(conversation_history, text, retry_count=0):
 
 async def main():
     conversation_history = [
-        {"role": "ai", "content": "Hello, welcome to XYZ Bank. I am your bank assistant. Ask me anything about your account."}
+        {"role": "assistant", "content": "Hello, welcome to XYZ Bank. I am your bank assistant. Ask me anything about your account."}
     ]
 
     await greet()  # FIX: greet() is async now too
