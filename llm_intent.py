@@ -90,6 +90,11 @@ async def run_intent(conversation_history, text, retry_count=0):
 
         if retry_count >= MAX_INTENT_RETRIES:
             await speak("I'm having trouble verifying your identity. Let me connect you to a staff member.")
+            from handlers.escalate  import handle_escalate
+
+            return await handle_escalate(conversation_history, text)
+            return "exit"   # call ends after ticket is raised, staff takes over
+
             return
         await handle_personal(conversation_history, retry_count=retry_count)
 
@@ -132,7 +137,7 @@ async def main():
         if result == "exit":
             break   # FIX: now actually catches the return value and stops
 
-
+    
 
 if __name__ == "__main__":
     asyncio.run(main())
