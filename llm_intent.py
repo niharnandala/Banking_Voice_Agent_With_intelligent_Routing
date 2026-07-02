@@ -1,4 +1,7 @@
 # llm_intent.py
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "handlers"))
 
 import asyncio
 import json
@@ -7,10 +10,6 @@ from connections import groq_client
 
 # imported at top level so knowledge_base.py loads ONCE when program starts
 # never reloads the embedding model again after that
-from handlers.personal  import handle_personal
-from handlers.general   import handle_general
-from handlers.smalltalk import handle_smalltalk
-from handlers.escalate  import handle_escalate
 
 
 intent_prompt = """
@@ -87,18 +86,26 @@ async def run_intent(conversation_history, text, retry_count=0):
         return "exit"   # caught in main() to break the loop
 
     elif intent == "personal" and confidence >= CONFIDENCE_THRESHOLD:
+        from handlers.personal  import handle_personal
+
         if retry_count >= MAX_INTENT_RETRIES:
             await speak("I'm having trouble verifying your identity. Let me connect you to a staff member.")
             return
         await handle_personal(conversation_history, retry_count=retry_count)
 
     elif intent == "general" and confidence >= CONFIDENCE_THRESHOLD:
+        from handlers.general   import handle_general
+
         await handle_general(conversation_history, text)
 
     elif intent == "smalltalk" and confidence >= CONFIDENCE_THRESHOLD:
+        from handlers.smalltalk import handle_smalltalk
+
         await handle_smalltalk(conversation_history)
 
     elif intent == "escalate" and confidence >= CONFIDENCE_THRESHOLD:
+        from handlers.escalate  import handle_escalate
+
         return await handle_escalate(conversation_history, text)
         return "exit"   # call ends after ticket is raised, staff takes over
 

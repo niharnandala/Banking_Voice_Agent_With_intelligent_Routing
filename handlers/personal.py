@@ -3,7 +3,7 @@ import json
 import asyncio
 from vachana import listen, speak, run_timer
 from connections import groq_client
-from queries import get_customer_full_data
+from queries import get_customer_full_data,validate_customer_id
 
 
 # ── PROMPTS ────────────────────────────────────────────────────────────────────
@@ -41,6 +41,8 @@ Rules:
 - No bullet points, no bold, no markdown formatting of any kind
 - Keep it short, like you are speaking out loud to someone on a phone call
 - Do not make up anything not present in the customer data above
+- After Answering the question completely ,ask:"do you have any other questions?".
+
 """
 
 
@@ -109,6 +111,11 @@ async def handle_personal(conversation_history, retry_count=0):
     if id_result.get("has_id"):
         customer_id = id_result.get("customer_id")
         print(f"\ncustomer_id: {customer_id}\n")
+
+        if not validate_customer_id(customer_id):
+            await speak(f"I could not find any account with ID {customer_id}. Could you please tell me your customer ID again?")
+            await handle_personal(conversation_history,retry_count=retry_count+1)
+            return
 
         await speak("Thank you, got it.")
         conversation_history.append({"role": "assistant", "content": f"got customer id: {customer_id}"})

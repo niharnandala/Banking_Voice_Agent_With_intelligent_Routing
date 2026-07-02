@@ -1,6 +1,3 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uuid
 import datetime
@@ -28,7 +25,7 @@ async def handle_escalate(conversation_history, user_text):
     print("=" * 50 + "\n")
 
     # tell the customer
-    await speak(f"I have raised a ticket for you. Your ticket id is {ticket['ticket_id']}. A staff member will contact you shortly.")
+    await speak(f"I have raised a ticket for you. Your ticket id is {ticket['ticket_id']}. A staff member will contact you shortly. Do you have any other questions?")
 
 
 def _summarize_history(conversation_history):

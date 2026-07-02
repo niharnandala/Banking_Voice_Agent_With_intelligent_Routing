@@ -52,6 +52,23 @@ def get_customer_full_data(customer_id):
 
     return customer_data
 
+def validate_customer_id(customer_id):
+     """
+    checks if customer_id actually exists in the database
+    before we try to fetch their data or answer any questions
+    returns True if found, False if not found
+    """
+     cursor = db_conn.cursor()
+
+     cursor.execute("""
+                    SELECT customer_id from customers
+                    where customer_id=%s
+                    """,(customer_id))
+     row=cursor.fetchone()
+     cursor.close()
+     return row is not None
+
+
 
 if __name__ == "__main__":
     data = get_customer_full_data("CU001")

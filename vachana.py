@@ -10,7 +10,7 @@ from connections import VACHANA_API_KEY, audio_queue
 
 SAMPLE_RATE  = 16000  # phone calls use 16000 samples per second, studio quality not needed here
 CHUNK_SIZE   = 512    # small chunk so vachana starts processing fast, big chunk causes delay on call
-SILENCE_WAIT = 1.2    # lowered from 2.5 — still natural but much faster turn detection
+SILENCE_WAIT = 1.5    # lowered from 2.5 — still natural but much faster turn detection
 
 # --- FIX: we need to know which asyncio event loop is "the" loop so the mic
 # callback (which runs on PortAudio's own background thread, NOT our event loop)

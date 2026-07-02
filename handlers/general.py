@@ -1,5 +1,3 @@
-import sys
-import os
 
 import re
 from vachana import speak,run_timer
@@ -11,6 +9,7 @@ general_prompt="""
 You are a banking voice assistant. Answer the customer's question
 using ONLY the information provided below from our knowledge base.
 
+
 Knowledge base information:
 {chunks}
 
@@ -20,7 +19,7 @@ Rules:
 - Keep it short, like you are speaking out loud to someone on a phone call
 - Do not make up anything not present in the information above
 - If the information above does not answer the question, say you will connect them to a staff member
-- After Answering the question completely ,ask if they had any other questions.
+- At the end of the answer ask wether they have any other questions.
 """
 
 def clean_for_speech(text):
