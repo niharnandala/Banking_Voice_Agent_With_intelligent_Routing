@@ -1,21 +1,16 @@
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "handlers"))
-# i add the handlers folder to Python's search path here at the very top
-# before any other imports happen
-# this means when any file does "from handlers.personal import..."
-# Python knows where to look
-# i do this once here so i dont need sys.path.append in every handler file
+# i add the handlers folder to Python's path once here at the top
+# so every file can do "from handlers.x import y" without needing
+# their own sys.path.append
 
 import asyncio
 import json
-from vachana import listen, greet, speak, run_timer
+from vachana import listen, greet, speak, run_timer, stop_listening
 from connections import groq_client
-# i import listen to capture user speech
-# greet to speak the welcome message at startup
-# speak to voice any response
-# run_timer to show live progress in the terminal
-# groq_client is my connection to the Groq LLM API
+# i also import stop_listening now — i call it when the user says goodbye
+# so vachana's reconnect loop stops cleanly instead of crashing
 
 
 intent_prompt = """
@@ -137,6 +132,10 @@ async def run_intent(conversation_history, text, retry_count=0):
 
     if intent == "exit" and confidence >= CONFIDENCE_THRESHOLD:
         await speak("Thank you for calling XYZ Bank. Have a great day. Goodbye.")
+        stop_listening()
+        # FIX: i call stop_listening() here before returning "exit"
+        # this sets the _should_stop flag in vachana.py so the reconnect
+        # loop breaks cleanly instead of crashing with "cannot schedule new futures"
         return "exit"
         # i check exit first before everything else
         # i return the string "exit" as a signal to main()
@@ -149,6 +148,7 @@ async def run_intent(conversation_history, text, retry_count=0):
             await speak("I'm having trouble verifying your identity. Let me connect you to a staff member.")
             from handlers.escalate import handle_escalate
             await handle_escalate(conversation_history, text)
+            stop_listening()
             return "exit"
             # i return "exit" here too because after escalation
             # there is no point in continuing to listen
@@ -156,13 +156,15 @@ async def run_intent(conversation_history, text, retry_count=0):
         from handlers.personal import handle_personal
         await handle_personal(conversation_history, retry_count=retry_count)
         # i import inside the if block not at the top of the file
-        # this is lazy importing — knowledge_base only loads
-        # if a general question actually comes in
-        # if the user only asks personal questions, general never loads
+        # this is lazy importing — personal only loads
+        # if a personal question actually comes in
 
     elif intent == "general" and confidence >= CONFIDENCE_THRESHOLD:
         from handlers.general import handle_general
         await handle_general(conversation_history, text)
+        # i import here so knowledge_base only loads
+        # if a general question actually comes in
+        # if the user only asks personal questions, general never loads
 
     elif intent == "smalltalk" and confidence >= CONFIDENCE_THRESHOLD:
         from handlers.smalltalk import handle_smalltalk
@@ -173,6 +175,7 @@ async def run_intent(conversation_history, text, retry_count=0):
     elif intent == "escalate" and confidence >= CONFIDENCE_THRESHOLD:
         from handlers.escalate import handle_escalate
         await handle_escalate(conversation_history, text)
+        stop_listening()
         return "exit"
         # after raising a ticket the call ends
         # staff takes over from here so i stop listening
@@ -185,6 +188,11 @@ async def run_intent(conversation_history, text, retry_count=0):
 
 
 async def main():
+    # i removed update_status and update_conversation parameters
+    # i no longer need them because app.py redirects sys.stdout
+    # to a StreamlitLogger — so every print() automatically shows
+    # in the browser without me passing functions through every file
+
     conversation_history = [
         {"role": "assistant", "content": "Hello, welcome to XYZ Bank. I am your bank assistant. Ask me anything about your account."}
     ]

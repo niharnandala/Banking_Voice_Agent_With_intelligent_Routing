@@ -46,6 +46,8 @@ User said: {text}
 data_answer_prompt = """
 You are a banking voice assistant. Answer the customer's question
 using ONLY the customer data provided below.
+- After answering the question completely, ask: do you have any other questions?
+
 
 Customer data:
 {data}
@@ -55,7 +57,6 @@ Rules:
 - No bullet points, no bold, no markdown formatting of any kind
 - Keep it short, like you are speaking out loud to someone on a phone call
 - Do not make up anything not present in the customer data above
-- After answering the question completely, ask: do you have any other questions?
 """
 # i wrote these rules because LLMs naturally want to format their responses
 # with bullet points and bold text which sounds terrible when spoken out loud
@@ -110,6 +111,11 @@ def clean_for_speech(text):
 
 
 async def handle_personal(conversation_history, retry_count=0):
+    # i removed update_status and update_conversation parameters
+    # app.py now redirects sys.stdout to StreamlitLogger
+    # so every print() here automatically shows in the browser
+    # no need to pass streamlit functions through every function anymore
+
     # retry_count tracks how many times we have bounced through here
     # without successfully getting a valid customer id
     # once it hits MAX_INTENT_RETRIES in llm_intent.py we stop and escalate

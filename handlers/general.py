@@ -48,6 +48,9 @@ def format_chunks(chunks):
 
 
 async def handle_general(conversation_history, user_text):
+    # i removed update_status and update_conversation parameters
+    # app.py now redirects sys.stdout to StreamlitLogger
+    # so every print() here automatically shows in the browser
 
     await speak("Let me look that up for you.")
     # i speak immediately so the user knows something is happening
@@ -120,6 +123,13 @@ async def handle_general(conversation_history, user_text):
     await answer_timer
 
     clean_reply = clean_for_speech(raw_reply)
+    # i clean the reply before speaking it
+    # in case the LLM added markdown despite my prompt rules
+
     conversation_history.append({"role": "assistant", "content": raw_reply})
+    # i store the raw reply in history not the cleaned version
+    # because the LLM reads history and understands markdown fine
+    # only the spoken version needs to be clean
+
     print(f"\nbot: {clean_reply}\n")
     await speak(clean_reply)

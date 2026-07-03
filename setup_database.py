@@ -83,7 +83,8 @@ cursor.execute("""
         ('CU002', 'Priya Sharma', '9876543211', 'priya@email.com'),
         ('CU003', 'Arjun Reddy', '9876543212', 'arjun@email.com'),
         ('CU004', 'Sneha Iyer', '9876543213', 'sneha@email.com'),
-        ('CU005', 'Vikram Singh', '9876543214', 'vikram@email.com')
+        ('CU005', 'Vikram Singh', '9876543214', 'vikram@email.com'),
+        ('CU007', 'Nihar Nandala', '9876543214', 'niharnandala@email.com')
     ON CONFLICT (customer_id) DO NOTHING
 """)
 print("customers inserted!")
@@ -98,7 +99,9 @@ cursor.execute("""
         ('CU002', 'premium', 80000.00, 5000.00, 'active'),
         ('CU003', 'zero_balance', 3000.00, 0.00, 'active'),
         ('CU004', 'savings', 500.00, 1000.00, 'active'),
-        ('CU005', 'premium', 150000.00, 5000.00, 'active')
+        ('CU005', 'premium', 150000.00, 5000.00, 'active'),
+        ('CU007', 'premium', 150000.00, 5000.00, 'active')
+
 """)
 print("accounts inserted!")
 
@@ -112,7 +115,9 @@ cursor.execute("""
         ('CU002', 'car', 800000.00, 350000.00, 14200.00, '2026-07-05', 'active'),
         ('CU003', 'personal', 200000.00, 50000.00, 9800.00, '2026-07-05', 'active'),
         ('CU004', 'personal', 100000.00, 95000.00, 6200.00, '2026-06-05', 'active'),
-        ('CU005', 'home', 3000000.00, 2800000.00, 27000.00, '2026-07-10', 'active')
+        ('CU005', 'home', 3000000.00, 2800000.00, 27000.00, '2026-07-10', 'active'),
+        ('CU007', 'home', 3000000.00, 2800000.00, 27000.00, '2026-07-10', 'active')
+
 """)
 print("loans inserted!")
 
