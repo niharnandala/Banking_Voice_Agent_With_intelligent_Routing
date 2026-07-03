@@ -8,7 +8,7 @@ import re
 # reads bank_policies.txt
 # detects each numbered section automatically using regex
 # splits each section into smaller overlapping chunks
-# saves everything as bank_policies.jsonl
+# saves everything asgit bank_policies.jsonl
 #
 # each line in the jsonl file looks like this:
 # {
