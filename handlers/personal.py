@@ -1,16 +1,10 @@
-import re
-import json
 import asyncio
 from vachana import listen, speak, run_timer
 from connections import groq_client
 from queries import get_customer_full_data, validate_customer_id
-# i imported re for cleaning markdown from LLM responses
-# json for parsing the LLM's JSON output safely
-# asyncio for my timers and async operations
-# listen and speak from vachana for voice input and output
-# run_timer to show live progress in the terminal
-# groq_client is my connection to the Groq LLM API
-# get_customer_full_data and validate_customer_id are my two DB functions
+from utils import clean_for_speech, safe_parse_json
+# i import clean_for_speech and safe_parse_json from utils.py
+# instead of defining them here — one place to maintain them
 
 
 id_prompt = """
@@ -34,112 +28,62 @@ or
 
 User said: {text}
 """
-# i wrote this prompt to handle the messy reality of speech to text
-# people dont say "CU001" cleanly, they say "see you zero zero one"
-# or "c u 001" or all kinds of variations
-# instead of writing regex to handle every case, i just tell the LLM
-# what the pattern is and give it examples — it handles the rest
-# i use double curly braces {{}} because this string goes through
-# .format() later and single braces would be treated as format placeholders
+# i wrote this prompt to handle messy speech to text reality
+# people dont say CU001 cleanly, they say "see you zero zero one"
+# instead of writing regex for every variation i just tell the LLM
+# what the pattern is and give examples — it handles the rest
+# double curly braces {{}} because .format() is called on this string later
+# single braces would be treated as format placeholders and crash
 
 
 data_answer_prompt = """
-You are a banking voice assistant. Answer the customer's question
-using ONLY the customer data provided below.
-- After answering the question completely, ask: do you have any other questions?
-
+You are a professional banking voice assistant speaking exactly like a trained Indian private bank call centre agent, similar to HDFC or ICICI phone banking staff.
 
 Customer data:
 {data}
 
-Rules:
-- Reply in plain spoken sentences only
-- No bullet points, no bold, no markdown formatting of any kind
-- Keep it short, like you are speaking out loud to someone on a phone call
+How you must speak:
+- Address the customer respectfully as "sir" or "ma'am" naturally within sentences but make it sound natural and use it where its only needed
+- Always say amounts with "rupees" after the number, for example "25,000 rupees" not just "25,000"
+- Use phrases like "as per our records", "I would like to inform you", "kindly note that" whenever it is required
+- Confirm what you found before answering, like "I can see your account here sir"
+- Be warm but professional — not too casual, not too stiff
+- Keep sentences short and spoken naturally, like you are on a phone call but do not over talk unneccesarly
+- Never use bullet points, bold, markdown, or lists of any kind
 - Do not make up anything not present in the customer data above
+- If a detail is not in the data, say "I'm afraid I don't have that information handy sir, but our branch team will be able to assist you with that"
+- After fully answering, always close with: "Is there anything else I can assist you with today sir" or "ma'am" depending on context
+
+Example of how you should sound:
+"Thank you for your patience sir. As per our records, your current account balance is 25,000 rupees. Kindly note that this reflects your available balance as of today. Is there anything else I can assist you with today sir?"
 """
-# i wrote these rules because LLMs naturally want to format their responses
-# with bullet points and bold text which sounds terrible when spoken out loud
-# "asterisk asterisk your balance is asterisk asterisk" is not what i want
-# the {data} placeholder gets replaced with the actual customer data
-# when i call .format(data=data) later
-
-
-def _safe_parse_json(raw_text, fallback):
-    # i wrote this helper because LLMs dont always return clean JSON
-    # even when i tell them to return ONLY JSON they sometimes wrap it
-    # in markdown fences like ```json { } ``` or add a sentence before it
-    # instead of crashing every time that happens i handle it here
-
-    cleaned = raw_text.strip()
-    # first i strip any leading or trailing whitespace
-
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-    # if the LLM wrapped the JSON in backticks i strip those off
-    # then if it starts with the word "json" i remove that too
-    # then i strip whitespace again to get the clean JSON string
-
-    try:
-        return json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"[warning] could not parse LLM JSON: {e!r}, raw was: {raw_text!r}")
-        return fallback
-    # i try to parse the cleaned string as JSON
-    # if it fails for any reason i print a warning and return
-    # whatever fallback the caller gave me instead of crashing
-
-
-def clean_for_speech(text):
-    # i wrote this as a safety net for cases where the LLM
-    # ignores my prompt rules and adds markdown anyway
-    text = re.sub(r'\*+', '', text)
-    # this removes all asterisks — catches both bold ** and italic *
-
-    text = re.sub(r'^\s*[-•]\s*', '', text, flags=re.MULTILINE)
-    # this removes bullet point characters at the start of any line
-    # re.MULTILINE makes ^ match start of each line not just start of string
-
-    text = ' '.join(text.split())
-    # this collapses all extra whitespace and newlines into single spaces
-    # so the spoken output is one clean continuous sentence
-
-    return text
+# i wrote these rules because LLMs naturally format with bold and bullets
+# which sounds terrible when spoken — "asterisk asterisk balance asterisk asterisk"
+# {data} gets replaced with the actual customer data when i call .format(data=data)
 
 
 async def handle_personal(conversation_history, retry_count=0):
-    # i removed update_status and update_conversation parameters
-    # app.py now redirects sys.stdout to StreamlitLogger
-    # so every print() here automatically shows in the browser
-    # no need to pass streamlit functions through every function anymore
-
-    # retry_count tracks how many times we have bounced through here
-    # without successfully getting a valid customer id
-    # once it hits MAX_INTENT_RETRIES in llm_intent.py we stop and escalate
-    # this prevents the infinite loop between personal and llm_intent
+    # retry_count tracks how many times we bounced here without a valid id
+    # once it hits MAX_INTENT_RETRIES in llm_intent.py we escalate to human
+    # this prevents infinite loop between personal.py and llm_intent.py
 
     # step 1: ask the user for their customer id
     await speak("Please tell me your customer id.")
-    # i await speak because speak is async — it blocks until the bot
-    # actually finishes talking before the mic opens again
+    # i await speak because it blocks until the bot finishes talking
+    # only then does the mic open — prevents bot hearing itself
     conversation_history.append({"role": "assistant", "content": "please tell your customer id"})
-    # i add this to history so the LLM knows what was said at each step
 
     # step 2: listen to what the user says
     user_text = await listen()
-    # listen() opens the mic, waits for the user to speak and go silent,
-    # then returns the full transcribed text as a plain string
+    # listen() opens mic, waits for speech and silence, returns transcribed text
     conversation_history.append({"role": "user", "content": user_text})
 
-    # step 3: send what they said to the LLM to extract the customer id
+    # step 3: send to LLM to extract the customer id
     check_stop  = asyncio.Event()
     check_timer = asyncio.create_task(run_timer("checking your id", check_stop))
-    # i create a stop event and start a timer task running alongside
-    # the timer just prints elapsed time in the terminal so i can see
-    # how long the LLM call is taking — i stop it after the call finishes
+    # i start a timer task alongside the LLM call
+    # it prints elapsed time in terminal so i can see how long it takes
+    # i stop it after the LLM call finishes
 
     try:
         id_response = groq_client.chat.completions.create(
@@ -149,17 +93,13 @@ async def handle_personal(conversation_history, retry_count=0):
                 {"role": "user",   "content": user_text}
             ]
         )
-        # i send the id_prompt with the user's text baked in
-        # the LLM reads the prompt rules and the user's words
-        # and extracts the customer id in standard CUxxx format
+        # i send the prompt with the user's words baked in
+        # the LLM reads the rules and extracts the id in CUxxx format
         raw_id_result = id_response.choices[0].message.content
-        # i dig into the response object to get the actual text
-        # choices[0] is the first (and only) completion
-        # .message.content is the plain text string i want
+        # choices[0] is the first completion, .message.content is the plain text
 
     except Exception as e:
-        # if Groq is down or the API call fails for any reason
-        # i catch it here so the whole call doesnt crash
+        # if Groq is down or API call fails i catch it here
         print(f"[error] id extraction LLM call failed: {e}")
         check_stop.set()
         await check_timer
@@ -167,34 +107,30 @@ async def handle_personal(conversation_history, retry_count=0):
         from handlers.escalate import handle_escalate
         await handle_escalate(conversation_history, user_text)
         return
-        # i set the stop event first so the timer prints its final time
-        # then i escalate to a human since i cant extract the id
+        # i stop the timer first then escalate to human
 
     check_stop.set()
     await check_timer
-    # i stop the timer now that the LLM call is done
 
     # step 4: parse the LLM reply safely
     fallback  = {"has_id": False, "customer_id": None}
-    id_result = _safe_parse_json(raw_id_result, fallback)
-    # i pass a safe fallback so if parsing fails i get has_id False
-    # which sends the user back through the flow to try again
+    id_result = safe_parse_json(raw_id_result, fallback)
+    # if parsing fails i get has_id False which sends user back to try again
 
     if id_result.get("has_id"):
-        # i use .get() instead of id_result["has_id"] because if the key
-        # is missing for any reason .get() returns None instead of crashing
+        # i use .get() not id_result["has_id"] because if key is missing
+        # .get() returns None safely instead of crashing with KeyError
 
         customer_id = id_result.get("customer_id")
         print(f"\ncustomer_id: {customer_id}\n")
 
         if not validate_customer_id(customer_id):
-            # the LLM extracted something that looks like a valid id
-            # but i need to confirm it actually exists in my database
-            # if it doesnt i tell the user and ask them to try again
+            # LLM extracted something that looks like a valid id
+            # but i confirm it actually exists in my database
+            # if not i tell the user and ask them to try again
             await speak(f"I could not find any account with ID {customer_id}. Could you please tell me your customer ID again?")
             await handle_personal(conversation_history, retry_count=retry_count + 1)
-            # i call myself again with retry_count bumped up by 1
-            # llm_intent.py will stop this loop once retries hit the max
+            # i call myself again with retry_count bumped by 1
             return
 
         await speak("Thank you, got it.")
@@ -209,20 +145,18 @@ async def handle_personal(conversation_history, retry_count=0):
             from handlers.escalate import handle_escalate
             await handle_escalate(conversation_history, user_text)
             return
-        # i wrap the DB call in try/except because the database
-        # could go down between the validate call and this call
-        # if it fails i escalate instead of crashing
+        # i wrap the DB call in try/except because the DB could go down
+        # between the validate call above and this call
 
         if data is None:
-            # this is a rare case — the id validated just above
-            # but the full data fetch returned nothing
-            # this could happen if the DB is in a weird state
+            # rare case — id validated but full fetch returned nothing
+            # could happen if DB is in a weird state
             await speak("I'm having trouble fetching your details right now. Let me connect you to a staff member.")
             from handlers.escalate import handle_escalate
             await handle_escalate(conversation_history, user_text)
             return
 
-        # step 6: send the question + customer data to LLM to generate an answer
+        # step 6: send question + customer data to LLM to generate answer
         answer_stop  = asyncio.Event()
         answer_timer = asyncio.create_task(run_timer("fetching your answer", answer_stop))
 
@@ -231,13 +165,12 @@ async def handle_personal(conversation_history, retry_count=0):
                 model    = "llama-3.1-8b-instant",
                 messages = [
                     {"role": "system", "content": data_answer_prompt.format(data=data)},
-                    # i bake the customer data into the system prompt
-                    # so the LLM answers only from this customer's real data
+                    # i bake customer data into system prompt
+                    # LLM can only answer from what i give it here
                     *conversation_history,
-                    # i spread the full conversation history in the middle
-                    # so the LLM knows the full context of what was discussed
+                    # full history so LLM has full context
                     {"role": "user", "content": user_text}
-                    # i put the user's question last so the LLM answers it
+                    # user question goes last
                 ]
             )
             raw_reply = answer_response.choices[0].message.content
@@ -248,31 +181,28 @@ async def handle_personal(conversation_history, retry_count=0):
             await answer_timer
             await speak("I'm having trouble getting your answer right now. Please try again in a moment.")
             return
-        # if the LLM call fails i stop the timer cleanly
-        # and tell the user to try again instead of crashing
+        # if LLM fails i stop timer and tell user to try again
 
         answer_stop.set()
         await answer_timer
 
         clean_reply = clean_for_speech(raw_reply)
-        # i run the reply through my cleaning function to strip
-        # any markdown the LLM might have added despite my prompt rules
+        # i clean the reply to strip any markdown the LLM added
 
         conversation_history.append({"role": "assistant", "content": raw_reply})
-        # i add the raw reply to history not the cleaned one
-        # because history is for the LLM to read and the LLM
-        # understands markdown — only the spoken version needs cleaning
+        # i add raw reply to history not cleaned version
+        # because LLM reads history and understands markdown
+        # only the spoken version needs cleaning
 
         print(f"\nbot: {clean_reply}\n")
         await speak(clean_reply)
 
     else:
-        # the LLM could not extract a customer id from what the user said
-        # i send the text back to run_intent to re-classify
-        # maybe they said something different and the intent changed
+        # LLM could not extract a customer id from what user said
+        # i send back to run_intent to re-classify
         from llm_intent import run_intent
-        # i import here not at the top to avoid circular import
-        # llm_intent.py imports personal.py at the top
-        # so if personal.py also imports llm_intent.py at the top
-        # Python gets stuck in an import loop and crashes
+        # i import here not at top to avoid circular import
+        # llm_intent.py imports personal.py at top level
+        # so personal.py cannot import llm_intent.py at top level
+        # Python would get stuck in an import loop and crash
         await run_intent(conversation_history, user_text, retry_count=retry_count + 1)
