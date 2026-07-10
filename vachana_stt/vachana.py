@@ -6,16 +6,16 @@ import time
 import subprocess
 import itertools
 from gnani.stt import GnaniSTTStreamClient, StreamTranscriptEvent
-from connections import VACHANA_API_KEY, audio_queue
+from connections.connections import VACHANA_API_KEY, audio_queue
 
 SAMPLE_RATE  = 16000  # i use 16000 samples per second — phone call quality, not studio
 CHUNK_SIZE   = 512    # i keep chunks small so vachana starts processing fast
-SILENCE_WAIT = 1.5    # i wait 1.5 seconds of silence before treating turn as done
+SILENCE_WAIT = 1      # i wait 1  second of silence before treating turn as done
 
-_main_loop  = None    # i store the event loop here so mic_callback can reach it safely
+_main_loop   = None   # i store the event loop here so mic_callback can reach it safely
 _is_speaking = False  # i use this flag to mute the mic while the bot is talking
 
-# FIX: i added this flag so the reconnect loop in start_listening knows
+# i added this flag so the reconnect loop in start_listening knows
 # when to stop retrying — before this it kept reconnecting forever after exit
 _should_stop = False
 
@@ -46,7 +46,7 @@ def mic_callback(indata, frames, time_info, status):
         )
     # i copy the audio data before putting it in the queue
     # because sounddevice reuses the same buffer for every chunk
-    # without copying, the data would get overwritten before i process it
+    # without copying the data would get overwritten before i process it
 
 
 def to_int16(audio):
@@ -251,14 +251,30 @@ async def start_listening(on_transcript, listen_once=False):
                         asyncio.create_task(run_timer("collecting audio from mic", collecting_stop))
 
                     async def send_audio():
+                        silence_since = time.time()
+                        # i start a silence clock the moment listening begins
+                        # i use this to detect when nobody has spoken for 20 seconds
+
                         while not done.is_set():
                             try:
                                 chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.5)
-                                # i use a 0.5s timeout instead of blocking forever
-                                # so this loop wakes up every 0.5s to check done
-                                # without this it would hang after listen_once finishes
+                                silence_since = time.time()
+                                # i reset the silence clock every time a new audio chunk arrives
+                                # meaning the user is actively speaking or making sound
+
                             except asyncio.TimeoutError:
+                                # no audio chunk arrived in the last 0.5 seconds
+                                # i check how long the total silence has been
+                                if not is_processing and (time.time() - silence_since) > 20:
+                                    # i only trigger this when bot is not already processing a response
+                                    # is_processing True means bot is mid-answer — i dont interrupt that
+                                    print("\n20 seconds of silence — ending call\n")
+                                    await speak("We have not heard from you for a while. Thank you for calling XYZ Bank. Goodbye.")
+                                    done.set()
+                                    # i set done which tells send_task, receive_task to stop
+                                    # same clean shutdown path that listen_once uses
                                 continue
+
                             try:
                                 await stream.send_audio(to_int16(chunk).tobytes())
                             except Exception:
@@ -288,7 +304,7 @@ async def start_listening(on_transcript, listen_once=False):
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     # i race all three tasks — whichever finishes first wins
-                    # done_task finishes when listen_once is done
+                    # done_task finishes when listen_once is done or silence timeout fires
                     # i then cancel whatever is still running so nothing hangs
 
                     for t in (send_task, receive_task, done_task):
@@ -303,9 +319,9 @@ async def start_listening(on_transcript, listen_once=False):
         except Exception as e:
             if _should_stop:
                 break
-            # FIX: i check _should_stop before reconnecting
+            # i check _should_stop before reconnecting
             # if the user said goodbye and the event loop is shutting down
-            # i stop retrying instead of crashing with "cannot schedule new futures"
+            # i stop retrying instead of crashing with cannot schedule new futures
             print(f"connection dropped: {e}, reconnecting in 1s...")
             await asyncio.sleep(1)
 

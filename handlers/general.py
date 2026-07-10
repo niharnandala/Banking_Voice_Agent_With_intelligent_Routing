@@ -1,8 +1,8 @@
 import asyncio
-from vachana import speak, run_timer
-from connections import groq_client
-from knowledge_base import search_knowledge_base
-from utils import clean_for_speech
+from vachana_stt.vachana import speak, run_timer
+from connections.connections import groq_client
+from scripts.knowledge_base import search_knowledge_base
+from utils.utils import clean_for_speech
 # i import search_knowledge_base at the top level
 # this means knowledge_base.py loads once when this file first imports
 # the embedding model loads at that moment and stays in memory

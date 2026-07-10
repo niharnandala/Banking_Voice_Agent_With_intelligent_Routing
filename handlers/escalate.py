@@ -1,6 +1,6 @@
 import uuid
 import datetime
-from vachana import speak
+from vachana_stt.vachana import speak
 # i import uuid to generate a unique ticket id for each escalation
 # datetime to timestamp when the ticket was raised
 # speak to tell the customer their ticket id out loud

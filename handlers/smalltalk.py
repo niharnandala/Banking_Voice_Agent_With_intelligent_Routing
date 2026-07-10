@@ -1,4 +1,4 @@
-from vachana import speak, listen
+from vachana_stt.vachana import speak, listen
 # i import speak and listen from vachana for voice in and out
 # i do NOT import run_intent here at the top level
 # because llm_intent.py imports smalltalk.py at the top

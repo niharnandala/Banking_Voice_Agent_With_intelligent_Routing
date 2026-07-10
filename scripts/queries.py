@@ -1,5 +1,5 @@
 from decimal import Decimal
-from connections import db_conn
+from connections.connections import db_conn
 # db_conn is my live database connection imported from connections.py
 # Decimal is imported because MySQL gives me back money values
 # as Decimal type and i need to convert them to plain floats before returning

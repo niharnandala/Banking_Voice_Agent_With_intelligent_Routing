@@ -9,9 +9,9 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "handle
 
 import asyncio
 import json
-from vachana import listen, greet, speak, run_timer
-from connections import groq_client
-from utils import safe_parse_json
+from vachana_stt.vachana import listen, greet, speak, run_timer
+from connections.connections import groq_client
+from utils.utils import safe_parse_json
 # i import listen to capture user speech
 # greet to speak the welcome message at startup
 # speak to voice any bot response
@@ -21,24 +21,71 @@ from utils import safe_parse_json
 
 
 intent_prompt = """
-You are an intent classifier for a banking voice agent.
-Classify the user query into exactly one of these:
-- general: bank policies, EMI policies, how to open account, public info
-- personal: balance, EMI due date, loan amount, personal account data
-- smalltalk: greetings, rubbish, not related to banking at all
-- escalate: modifying something, complex request, needs staff help
-- exit: user wants to end the call, says bye, no thanks, stop, that's fine, goodbye
+You are an intent classifier for a banking voice agent in India.
 
-Reply with ONLY valid JSON in this exact format, nothing else:
+The user may speak in English, Hindi, Telugu, Hinglish (Hindi+English mixed), or Tenglish (Telugu+English mixed).
+Classify based on the MEANING of what they said, not the language they said it in.
+Even if the transcription looks broken or partially spelled out, try your best to understand the intent.
+
+Classify the user query into EXACTLY one of these five intents:
+
+1. personal
+   - User is asking about their own account information
+   - Examples: balance, loan amount, EMI due date, transaction history, account number, loan status
+   - Hindi examples: "mera balance kya hai", "mera loan kitna bacha hai", "EMI kab kategi"
+   - Telugu examples: "naa balance cheppandi", "naa loan entha undi", "EMI epudu kattatam"
+   - Hinglish: "my balance kitna hai", "loan amount batao"
+   - IMPORTANT: only classify as personal if they are asking about THEIR OWN account data
+   - Do NOT classify as personal if they are asking general policy questions
+
+2. general
+   - User is asking about bank policies, products, or procedures that apply to everyone
+   - Examples: how to open account, what documents needed, interest rates, EMI policies, late payment charges, how mobile banking works
+   - Hindi examples: "account kaise kholte hain", "late payment pe kitna charge lagta hai"
+   - Telugu examples: "account ela open cheyali", "interest rate enti"
+   - These are questions ANY customer could ask, not specific to their own account
+   - Do NOT classify as general if they mention "my", "mera", "naa", "nenu" — those are personal
+
+3. smalltalk
+   - User is saying something completely unrelated to banking
+   - Examples: talking about weather, cricket, movies, random conversation, testing the bot
+   - Also includes: when the user says hello, hi, how are you — treat as smalltalk to reset
+   - Do NOT classify as smalltalk just because the language is Hindi or Telugu
+   - Only smalltalk if the topic itself is not banking related
+
+4. escalate
+   - User wants to DO something that requires human intervention
+   - Examples: change address, update mobile number, close account, dispute a transaction, modify loan terms, request a new card, make a complaint
+   - Hindi examples: "mera address change karna hai", "mujhe complaint karni hai"
+   - Telugu examples: "naa address marchali", "complaint cheyali"
+   - Also escalate if the user sounds very frustrated or angry
+   - Do NOT escalate just because the question is complex — if it is informational route to general
+
+5. exit
+   - User clearly wants to END the conversation with nothing more to ask
+   - Examples: "bye", "goodbye", "that's all", "no more questions", "thank you that's it", "I'm done"
+   - Hindi: "bas ho gaya", "dhanyawad", "theek hai band karo"
+   - Telugu: "ante idi chalu", "sari bye", "inkem ledu"
+   - IMPORTANT: "thank you" alone is NOT exit — the user might be thanking before asking next question
+   - Only exit if they clearly signal the conversation is over
+   - "thank you that's all" IS exit. "thank you, what about my EMI" is NOT exit.
+
+Edge cases you must handle correctly:
+- Very short inputs like "yes", "no", "okay", "haan", "ledu" — these are follow-up responses, classify based on conversation context
+- Partial sentences like "i want to know" — not enough info, classify as smalltalk with low confidence
+- Completely unclear or noise-only transcription — classify as smalltalk with confidence 0.0
+- User asking about another bank — classify as general, the bot will handle it
+- User asking something personal but without saying "my" explicitly — still classify as personal based on context
+- Mixed language mid-sentence is normal and expected — classify on meaning
+
+Reply with ONLY valid JSON in this exact format, nothing else, no explanation, no extra text:
 {"intent": "personal", "confidence": 0.85}
+
+Confidence guide:
+- 0.9 to 1.0 — very clear, no doubt
+- 0.7 to 0.9 — fairly clear, minor ambiguity
+- below 0.7 — unclear, let the else branch handle it
 """
-# i defined five intents that cover every possible type of call
-# general is for public bank information anyone can ask
-# personal is for account specific data needing customer id verification
-# smalltalk catches anything unrelated so i can reset and restart cleanly
-# escalate is for things too complex for the bot to handle
-# exit catches goodbye phrases so i can end the call properly
-# i ask for confidence so i can ignore low confidence guesses
 
 CONFIDENCE_THRESHOLD = 0.7
 # i set this to 0.7 meaning LLM needs to be at least 70% sure
@@ -154,7 +201,7 @@ async def run_intent(conversation_history, text, retry_count=0):
         # staff takes over from here so i stop listening
 
     else:
-        await speak("I'm not sure I understood that, could you repeat?")
+        await speak("I'm not sure I understood that. Could you please repeat or rephrase?")
         # this catches anything below the confidence threshold
         # the while loop in main() continues naturally after this
         # so the bot goes back to listening automatically
@@ -178,9 +225,10 @@ async def main():
         # listen() returns the full transcribed sentence as a plain string
 
         if not text:
-            continue
-        # if listen() returned empty string the user said nothing
-        # i skip this iteration and go back to listening
+            break
+        # if listen() returned empty string it means the 20 second silence
+        # timeout fired in vachana.py and the session ended
+        # i break instead of continue so the program exits cleanly
 
         result = await run_intent(conversation_history, text)
         # run_intent classifies and routes to the right handler
