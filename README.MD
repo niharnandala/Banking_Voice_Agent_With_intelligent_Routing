@@ -75,7 +75,7 @@ bot:   I have raised a ticket for you sir. Staff will contact you shortly.
 
 ## How it works
 
-![Flow diagram](assets/flow.png)
+![Flow diagram](assets/flow.svg)
 
 
 
