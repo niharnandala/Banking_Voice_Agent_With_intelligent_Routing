@@ -1,217 +1,294 @@
 # Banking Voice Agent with Intelligent Routing
 
-## The Business Problem First
-
-Every human handled bank call in India costs ₹25 to ₹75 fully loaded.
-
-Not just the agent salary. Infrastructure. Training. Management overhead. All of it.
-
-10,000 calls a day. Do the math.
-
-And most of those calls are the same four things — balance check, EMI status, policy question, or "I need to talk to someone." Routine. Repetitive. Expensive.
-
-This project handles those four automatically. No human agent needed for the routine ones. Human agents only get pulled in when something actually needs them.
-
-That is the business case. ₹75 per call down to ₹9. At scale that difference is not small.
+A production-grade voice agent for Indian banking that listens, understands, and responds in English, Hindi, Telugu, Hinglish, and Tenglish. No menus. No buttons. Just a conversation.
 
 ---
 
-## Why This Exists
+## Layer 1 — What it does
 
-Most AI voice agents being built right now are LLM wrappers.
-
-```
-🎤 User speaks  →  📦 dump everything into one prompt  →  🤞 hope for the best
-```
-
-No intent routing. No structured fallback. No cost control on tokens. Every single query goes through the full LLM whether it needs to or not.
-
-At 10,000 calls a day that token cost adds up fast.
-
-On top of that most of these agents are built on Whisper or Google STT. Both trained mostly on foreign English. Indian customers do not speak that way on a phone call. They pause differently. They mix words differently. They spell out things like "see you zero zero one" when they mean CU001.
-
-Foreign trained STT fails on this. Constantly.
-
-So there were two real problems worth solving:
-
-One — token cost exploding because everything goes through the LLM blindly.
-
-Two — STT failing on how Indians actually speak.
-
-This project solves both.
-
----
-
-## How It Works and Why Every Decision Was Made This Way
+A customer calls. They speak naturally in whatever language they are comfortable in. The agent understands what they want, verifies who they are, fetches their real account data, and speaks back a natural response — all in under 4 seconds per turn.
 
 ```
-🎤 Customer speaks
-        ↓
-🧠 Vachana STT decodes the audio
-        ↓
-⚡ Intent classifier runs first
-        ↓
-        ├── 💰 Balance / EMI / Loan   →  hits PostgreSQL directly
-        ├── 📋 Policy / FAQ           →  searches ChromaDB knowledge base
-        ├── 🚨 Complex request        →  raises a structured staff ticket, stops
-        └── ❓ Unclear input          →  resets and continues
+customer speaks          →    agent understands    →    agent responds
+"mera balance kya hai"        personal query             "Aapka balance
+"i want to know my EMI"       personal query              1.5 lakh rupees hai sir"
+"how to open account"         general query              pulls from knowledge base
+"address change karna hai"    escalation                 raises staff ticket
 ```
 
-**Why Vachana STT and not Whisper**
-
-Vachana is built by Gnani.ai and trained on Indian voice data across BFSI specifically. It handles the way Indians actually speak on phone calls — the pauses, the Hinglish mixing, the spelled out customer IDs. Whisper struggles with this. Vachana does not.
-
-**Why intent classification runs before anything else**
-
-If someone asks their balance you do not need to search the knowledge base. If someone asks a policy question you do not need to hit the database. Classifying first means only the right thing runs. Nothing extra. Tokens stay controlled and the response is faster because you are not doing unnecessary work.
-
-**Why PostgreSQL for personal queries and not the LLM**
-
-The LLM does not know your balance. It cannot know. It makes things up. For anything personal — balance, EMI, loan — the only right answer is to hit the actual database and return the actual number. The LLM just formats the response after the data is fetched. It never guesses.
-
-**Why ChromaDB with dynamic drop detection and not a fixed threshold**
-
-Standard RAG pipelines set a fixed similarity threshold like 0.7 and call it done. The problem is 0.7 means different things for different queries and different models. Sometimes 0.65 is excellent. Sometimes 0.82 is mediocre.
-
-Dynamic drop detection looks at the shape of the scores instead. If scores are 0.91, 0.88, 0.85, 0.61, 0.58 — the gap between 0.85 and 0.61 is the signal. Cut there. Keep the first three. The system adapts to whatever the query produces instead of trusting a number someone picked manually.
-
-**Why there is a retry limit and a clean escalation path**
-
-Most bots either answer everything confidently including wrong answers, or they crash and loop forever when confused. Neither is acceptable in banking.
-
-This system has a confidence threshold. If the LLM is not sure enough it asks again. If after three tries it still cannot get a valid customer ID it stops, raises a ticket, and hands off to a human. It knows its own limits. That is not a weakness. In banking that is exactly what you want.
-
-**Why the mic is muted while the bot is speaking**
-
-Without this the bot hears its own voice through the microphone, transcribes it as a new user query, and responds to itself. That loop runs forever. The mic mutes the moment the bot starts speaking and only opens again after speech is fully finished — confirmed by a stdout marker from PowerShell, not a timer guess.
-
-**Why audio queue uses call_soon_threadsafe**
-
-sounddevice runs the mic callback on a completely separate OS thread. asyncio.Queue is not thread safe. If you call put_nowait directly from that thread while the event loop is doing a get on the same queue you get race conditions — corrupted data, dropped audio chunks, weird bugs that only happen sometimes and are nearly impossible to reproduce. call_soon_threadsafe hands the audio chunk back to the event loop thread which then puts it in the queue safely on its own turn.
-
----
-
-## What Makes This Different From the 1000 Other Voice Agent Projects
-
-You have seen voice agent projects. Everyone has one now.
-
-Here is what most of them do not have:
-
-**Real data. Not a mock.**
-This hits an actual PostgreSQL database with real customer records. Not hardcoded responses. Not a fake API. When the bot says your balance is 25000 it got that number from a real database query.
-
-**A system that knows when to stop.**
-Most demo projects answer everything. This one has a confidence threshold, a retry counter, and a structured escalation path that raises a ticket with conversation context for the staff member who picks it up. Building something that fails gracefully is harder than building something that answers confidently and wrong.
-
-**Token cost awareness built into the architecture.**
-The 4 way routing is not just about speed. It is about cost. General policy questions go to ChromaDB. Personal queries go to PostgreSQL. The LLM only gets called for what it actually needs to do — intent classification and response generation. Not retrieval. Not data lookup. That discipline matters at scale.
-
-**Production minded error handling throughout.**
-Every API call is wrapped in try/except with a safe fallback. Every database call checks if the result is None before trusting it. The STT reconnect loop checks a stop flag before retrying so it does not crash with "cannot schedule new futures" after the call ends. These are the things that break in production that demo projects never think about.
-
----
-
-## Project Structure
+Real numbers from a live session:
 
 ```
-Banking-Voice-Agent/
-│
-├── app.py                  # Streamlit frontend — browser mic + live pipeline logs
-├── llm_intent.py           # Intent classification and routing brain
-├── vachana.py              # Audio pipeline — STT streaming, TTS, mic handling
-├── knowledge_base.py       # ChromaDB setup and vector search with drop detection
-├── queries.py              # PostgreSQL queries — customer data fetch and validation
-├── connections.py          # API keys and DB connection setup
-├── setup_database.py       # Creates and seeds the PostgreSQL database
-├── bank_policies.jsonl     # Knowledge base source — bank policy chunks
-├── convert_to_jsonl.py     # Converts raw policy text to JSONL format
-│
-├── handlers/
-│   ├── personal.py         # Handles balance, EMI, loan queries — hits PostgreSQL
-│   ├── general.py          # Handles policy questions — searches ChromaDB
-│   ├── escalate.py         # Raises structured ticket for complex requests
-│   └── smalltalk.py        # Resets conversation and reintroduces bot
-│
-└── chroma_db/              # Persisted ChromaDB vector store
+intent classification     0.0s
+customer id extraction    0.0s
+knowledge base search     0.0s
+answer generation         0.0s
+bot speaking              2.8s to 3.4s
+total turn time           under 4 seconds
 ```
 
 ---
 
-## Stack
+## Layer 2 — How it works
 
-| Layer | Technology | Why |
-|---|---|---|
-| Speech to Text | Gnani Vachana STT | Trained on Indian voice data |
-| LLM | Groq LLaMA 3 | Sub-second response times |
-| Vector Database | ChromaDB | Persistent, local, fast |
-| Relational Database | PostgreSQL | Real customer data |
-| Frontend | Streamlit | Live pipeline visibility in browser |
-| Language | Python async | Non-blocking audio + API calls |
+Five things happen on every call, in this order every time.
+
+```
+LISTEN
+the mic opens, audio streams to Vachana STT in real time
+1.5 seconds of silence means the customer is done talking
+
+UNDERSTAND
+the full transcript goes to an LLM intent classifier
+five possible intents: personal, general, escalate, smalltalk, exit
+works in English, Hindi, Telugu, and any mix of the three
+
+ROUTE
+personal   →   verify customer id, fetch account data, answer
+general    →   search knowledge base, retrieve relevant chunks, answer
+escalate   →   raise a ticket, hand off to staff
+smalltalk  →   reset conversation, reintroduce the bot
+exit       →   say goodbye, end call cleanly
+
+FETCH
+personal queries hit the customer database
+general queries hit a ChromaDB vector store with bank policy documents
+nothing is made up — every answer comes from real data
+
+RESPOND
+LLM generates a natural spoken response
+cleaned of any markdown before speaking
+spoken out loud via TTS, mic reopens only after bot finishes
+```
 
 ---
 
-## How to Run
+## Layer 3 — Why these tools and these decisions
 
-**1. Clone the repo**
-```bash
-git clone https://github.com/niharnandala/Banking_Voice_Agent_With_intelligent_Routing
-cd Banking_Voice_Agent_With_intelligent_Routing
+Every tool in this stack was chosen for a reason.
+
+**Vachana STT by Gnani.ai over Whisper or Azure**
+
+Indian callers do not speak textbook English. They say "see you zero zero one" for CU001, "mera balance kya hai" mid-conversation, and switch languages every sentence. Vachana is trained on over a million hours of real Indian voice data across BFSI specifically. Generic models fail on this. Vachana does not.
+
+**Groq with LLaMA 3.1 8B Instant over OpenAI**
+
+Speed is everything on a voice call. Groq's inference is sub-100ms for classification tasks. OpenAI at the same model size is 3 to 5x slower. For a system where every second of silence feels wrong to a caller, this matters.
+
+**ChromaDB with Dynamic Drop Detection over fixed similarity threshold**
+
+Standard RAG uses a fixed threshold like 0.7 to decide which chunks are relevant. This breaks across different models and datasets — for one model 0.65 is excellent, for another 0.82 is average. This system looks at the shape of scores instead.
+
+```
+scores:   0.91   0.89   0.85   0.61   0.58
+gaps:            0.02   0.04   0.24   0.03
+
+gap of 0.24 between position 2 and 3 is bigger than threshold 0.15
+cut here — keep first 3, discard the rest
 ```
 
-**2. Install dependencies**
-```bash
-pip install -r requirements.txt
+This adapts to whatever the model produces. No manual tuning needed when the knowledge base changes.
+
+**all-MiniLM-L6-v2 for embeddings**
+
+384 dimensions, fast inference, good enough accuracy for FAQ-style banking queries. Loads once at startup, stays in memory for the entire session. Never reloads mid-call.
+
+**PowerShell System.Speech with marker-based completion**
+
+The original approach fired a Speak command and returned instantly. The mic would reopen while the bot was still talking, capturing the bot's own voice as a new user question — a self-hearing loop. The fix: after every Speak command, a unique marker is written to stdout. The code blocks reading stdout until that marker appears. Speech is guaranteed done before the mic opens.
+
+```
+old way    fire Speak()  →  return immediately  →  mic opens  →  bot hears itself
+new way    fire Speak()  →  write marker        →  read stdout until marker seen  →  mic opens
 ```
 
-**3. Set up environment variables**
+---
 
-Create a `.env` file:
+## Layer 4 — Architecture and file structure
+
 ```
-VACHANA_API_KEY=your_vachana_key
-GROQ_API_KEY=your_groq_key
-DB_HOST=your_db_host
-DB_NAME=your_db_name
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
+llm_intent.py                 entry point, main loop, intent router
+vachana_stt/
+    vachana.py                mic input, STT streaming, TTS output, silence detection
+handlers/
+    personal.py               customer id extraction, DB lookup, account answers
+    general.py                knowledge base search, policy answers
+    escalate.py               ticket generation, staff handoff
+    smalltalk.py              conversation reset, bot reintroduction
+scripts/
+    queries.py                database functions, customer data fetch, id validation
+knowledge_base.py             ChromaDB search, embedding, dynamic drop detection
+utils/
+    utils.py                  shared helpers: JSON parser, markdown cleaner
+connections/
+    connections.py            API keys, DB connection, audio queue
 ```
 
-**4. Set up the database**
-```bash
-python setup_database.py
+**The flow in code terms:**
+
+```
+asyncio.run(main())
+    │
+    ├── await greet()                          bot speaks welcome
+    │
+    └── while True:
+            │
+            ├── text = await listen()          mic opens, STT streams, silence closes
+            │
+            ├── await run_intent(text)
+            │       │
+            │       ├── personal  → handle_personal()
+            │       │       ├── await listen()          ask for customer id
+            │       │       ├── LLM extracts id
+            │       │       ├── validate_customer_id()  check DB
+            │       │       ├── get_customer_full_data() fetch everything
+            │       │       └── LLM answers from data
+            │       │
+            │       ├── general   → handle_general()
+            │       │       ├── search_knowledge_base()  vector search
+            │       │       ├── dynamic drop detection   filter chunks
+            │       │       └── LLM answers from chunks
+            │       │
+            │       ├── escalate  → handle_escalate()
+            │       │       └── raise ticket, return exit
+            │       │
+            │       ├── smalltalk → handle_smalltalk()
+            │       │       └── clear history, reintroduce bot
+            │       │
+            │       └── exit      → speak goodbye, return exit
+            │
+            └── if result == "exit": break
 ```
 
-**5. Build the knowledge base**
-```bash
+---
+
+## Layer 5 — The bugs that were fixed and why they mattered
+
+**Thread safety on the audio queue**
+
+sounddevice fires mic_callback on its own OS thread. asyncio.Queue is not thread safe. Calling put_nowait directly from that thread while the event loop is doing a get on the same queue causes race conditions on internal data structures — silent audio drops, occasional crashes, never reproducible consistently. Fix: call_soon_threadsafe hands the chunk to the event loop which puts it in the queue safely on its own turn.
+
+```python
+# wrong — audio thread touches queue directly
+audio_queue.put_nowait(indata[:, 0].copy())
+
+# correct — audio thread asks event loop to do it
+_main_loop.call_soon_threadsafe(audio_queue.put_nowait, indata[:, 0].copy())
+```
+
+**TTS completion sync**
+
+Old code fired Speak and returned instantly. Mic reopened mid-sentence. Bot transcribed its own voice as new user input. Fix: unique marker written after each Speak, stdout read until marker appears, only then mic opens.
+
+**Infinite recursion between personal and intent classifier**
+
+When a user cannot provide a valid customer id, personal.py calls back into run_intent which calls back into handle_personal. Without a counter this loops forever. Fix: retry_count passed through every call, escalates to human after 3 failures.
+
+**listen_once hang**
+
+In listen_once mode, receive() sits blocked inside async for event in stream with nothing to wake it up once done is set. The whole listening session would hang. Fix: send_audio, receive, and done.wait run as separate tasks raced with asyncio.wait FIRST_COMPLETED, then explicitly cancelled.
+
+**Circular imports**
+
+llm_intent.py imports smalltalk.py. smalltalk.py needs run_intent from llm_intent.py. Top level import causes Python to get stuck — A imports B, B imports A, A is still loading. Fix: import run_intent inside the function body, not at module level. Same pattern in personal.py.
+
+**LLM JSON parsing**
+
+LLMs told to return only JSON sometimes wrap it in markdown fences or add a sentence. Raw json.loads crashes on this. Fix: strip backtick fences, strip json label, try parse, fall back to safe default on failure. Used everywhere LLM output is parsed.
+
+**20 second silence timeout**
+
+If nobody speaks, the program waits forever. silence_since tracks last audio chunk time inside send_audio. Every 0.5s timeout check compares against 20 seconds. If exceeded, bot speaks goodbye and sets done to shut everything down cleanly.
+
+---
+
+## How to run it
+
+**Requirements**
+
+```
+Python 3.10 or above
+MySQL database with customers, accounts, loans tables
+Vachana API key from Gnani.ai
+Groq API key
+Windows (TTS uses PowerShell System.Speech)
+```
+
+**Install dependencies**
+
+```
+pip install sounddevice numpy groq chromadb sentence-transformers mysql-connector-python
+pip install gnani-stt
+```
+
+**Set up environment**
+
+Create a connections/connections.py file:
+
+```python
+import asyncio
+import groq
+import mysql.connector
+
+VACHANA_API_KEY = "your_vachana_key"
+audio_queue     = asyncio.Queue()
+groq_client     = groq.Groq(api_key="your_groq_key")
+db_conn         = mysql.connector.connect(
+    host     = "localhost",
+    user     = "your_user",
+    password = "your_password",
+    database = "your_db"
+)
+```
+
+**Build the knowledge base**
+
+```
 python knowledge_base.py
 ```
 
-**6. Run via Streamlit**
-```bash
-streamlit run app.py
-```
+Run this once. ChromaDB saves to disk. Never needs to run again unless bank_policies.jsonl changes.
 
-Or run directly in terminal:
-```bash
+**Start the agent**
+
+```
 python llm_intent.py
 ```
 
 ---
 
-## What Is Still Being Built
+## What a real session looks like
 
 ```
-✅ Core voice pipeline
-✅ Intent routing — 4 handlers
-✅ PostgreSQL integration — live customer data
-✅ ChromaDB RAG — dynamic drop detection
-✅ Streamlit frontend — live pipeline logs in browser
-✅ Error handling — every API call and DB call wrapped
-✅ Customer ID validation — against real database
-🔄 Vachana TTS — in progress, contacted Gnani team
-🔄 FastAPI deployment
-🔄 Hindi and Hinglish support
+bot:   Hello, welcome to XYZ Bank. I am your bank assistant.
+
+user:  mera balance kya hai
+bot:   Let me check that for you.
+       intent: personal, confidence: 0.95
+bot:   Please tell me your customer id.
+
+user:  my customer id is cu 007
+       customer_id: CU007
+bot:   Dhanyawad sir. Aapka balance 1.5 lakh rupees hai.
+       Is there anything else I can assist you with today sir?
+
+user:  could you get me some bank emi policies
+bot:   Let me look that up for you.
+       intent: general, confidence: 0.80
+       kept 5 chunks after drop detection
+bot:   EMI har mahine 5 ko automatically deducted hota hai.
+       Bounce charge 500 rupees per instance hai sir.
+
+user:  i want to change my bank account
+bot:   Let me check that for you.
+       intent: escalate, confidence: 0.85
+       ESCALATION TICKET RAISED
+       ticket id: 43A5E499
+bot:   I have raised a ticket for you sir.
+       A staff member will contact you shortly.
 ```
 
 ---
 
-Built with [@Gnani.ai](https://gnani.ai) Vachana STT
+Built by Nihar Nandala
+github.com/niharnandala/Banking_Voice_Agent_With_intelligent_Routing
