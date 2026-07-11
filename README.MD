@@ -75,52 +75,15 @@ bot:   I have raised a ticket for you sir. Staff will contact you shortly.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[🎙️ Customer speaks] --> B[Vachana STT\nstreams audio]
-    B --> C{1.5s silence\ndetected}
-    C --> D[LLM classifies\nintent]
-    D --> E{confidence\n≥ 0.7?}
-    E -->|yes| F{Intent?}
-    E -->|no| G[Ask to repeat]
-    F -->|personal| H[Verify ID\nFetch DB data\nAnswer]
-    F -->|general| I[Search ChromaDB\nDrop detection\nAnswer]
-    F -->|escalate| J[Raise ticket\nEnd call]
-    F -->|smalltalk| K[Reset history\nReintroduce bot]
-    F -->|exit| L[Say goodbye\nEnd call]
-```
+![Flow diagram](assets/flow.png)
+
+
 
 ---
 
 ## Intent routing in detail
 
-```mermaid
-flowchart TD
-    U[User speaks in\nEnglish · Hindi · Telugu · Hinglish] --> C[LLM Intent Classifier\nreads full conversation history]
-
-    C -->|personal 0.95| P[handle_personal]
-    C -->|general 0.80| G[handle_general]
-    C -->|escalate 0.85| E[handle_escalate]
-    C -->|smalltalk| S[handle_smalltalk]
-    C -->|exit| X[end call]
-
-    P --> P1[Ask for customer ID]
-    P1 --> P2[LLM extracts ID\neven from broken speech]
-    P2 --> P3{ID exists\nin DB?}
-    P3 -->|no| P1
-    P3 -->|yes| P4[Fetch full account data]
-    P4 --> P5[LLM answers\nfrom real data only]
-
-    G --> G1[search_knowledge_base]
-    G1 --> G2[Dynamic drop detection\nfilters irrelevant chunks]
-    G2 --> G3[LLM answers\nfrom retrieved chunks]
-
-    E --> E1[Generate ticket\nwith full conversation summary]
-    E1 --> E2[Print for staff\nSpeak ticket ID to customer]
-
-    S --> S1[Clear history\nReintroduce bot\nListen again]
-```
-
+![Routing diagram](assets/routing.svg)
 ---
 
 ## Why these tools
