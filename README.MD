@@ -55,7 +55,6 @@ first request after it's been idle can take 30 to 60 seconds, that's render waki
 
 ## how it routes a request
 
-<img src="assets/routing.svg" alt="routing flow" width="600">
 
 ```mermaid
 flowchart TD
@@ -82,7 +81,6 @@ flowchart TD
 </tr>
 </table>
 
-full flow diagram: [assets/flow.svg](assets/flow.svg)
 
 ---
 
