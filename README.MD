@@ -14,8 +14,11 @@ Built by Nihar Nandala
 
 **[full build notes, bugs and all →](ENGINEERING.md)**
 
-<!-- drop a demo gif or screenshot right here, this is the first thing anyone actually looks at -->
-**[add your Render url here once it's deployed]**
+<img src="assets/img1.png" alt="Banking Voice Agent screenshot" width="700">
+
+**[▶ watch the demo video](https://drive.google.com/file/d/1iRFWrVh8Go262TinqsGVLbgLa5nKBTIG/view?usp=sharing)**
+
+**[[add your Render url here once it's deployed](https://banking-voice-agent-with-intelligent.onrender.com/ui)]**
 
 </div>
 
@@ -37,6 +40,8 @@ first request after it's been idle can take 30 to 60 seconds, that's render waki
 
 ## how it routes a request
 
+<img src="assets/routing.svg" alt="routing flow" width="600">
+
 ```mermaid
 flowchart TD
     A[user speaks] --> B[classify_intent via Groq]
@@ -46,6 +51,21 @@ flowchart TD
     C -->|escalate| I[raise ticket] --> J[human takes over]
     C -->|smalltalk| K[reset and re greet]
 ```
+
+## screenshots
+
+<table>
+<tr>
+<td><img src="assets/img1.png" width="400"></td>
+<td><img src="assets/img2.png" width="400"></td>
+</tr>
+<tr>
+<td><img src="assets/img3.png" width="400"></td>
+<td><img src="assets/img4.png" width="400"></td>
+</tr>
+</table>
+
+full flow diagram: [assets/flow.svg](assets/flow.svg)
 
 ## what i actually measured, not just claimed
 
@@ -137,6 +157,7 @@ utils/                    safe json parsing, prompt loading
 prompts/                  raw prompt text
 connections/              api keys, pooled db connection, groq client
 Gnani_Vachana_TTS/        streaming and full file tts for the browser
+assets/                   screenshots, demo video, flow diagrams
 ```
 
 ---
