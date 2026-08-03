@@ -16,9 +16,10 @@ Built by Nihar Nandala
 
 <img src="assets/img1.png" alt="Banking Voice Agent screenshot" width="700">
 
+**[▶ watch the demo video](https://drive.google.com/file/d/1iRFWrVh8Go262TinqsGVLbgLa5nKBTIG/view?usp=sharing)**
+
 [![Live Demo](https://img.shields.io/badge/▶_TRY_THE_LIVE_DEMO-22c55e?style=for-the-badge)](https://banking-voice-agent-with-intelligent.onrender.com/ui)
 
-**[[add your Render url here once it's deployed](https://banking-voice-agent-with-intelligent.onrender.com/ui)]**
 
 </div>
 
