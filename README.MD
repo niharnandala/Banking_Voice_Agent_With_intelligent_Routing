@@ -12,18 +12,32 @@ Built by Nihar Nandala
 [![Postgres](https://img.shields.io/badge/DB-Postgres_(Neon)-336791?style=flat-square&logo=postgresql&logoColor=white)](https://neon.tech)
 [![License](https://img.shields.io/badge/License-MIT-muted?style=flat-square)](LICENSE)
 
+[![Live Demo](https://img.shields.io/badge/▶_TRY_THE_LIVE_DEMO-22c55e?style=for-the-badge)](https://banking-voice-agent-with-intelligent.onrender.com/ui)
+
 **[full build notes, bugs and all →](ENGINEERING.md)**
 
 <img src="assets/img1.png" alt="Banking Voice Agent screenshot" width="700">
 
 **[▶ watch the demo video](https://drive.google.com/file/d/1iRFWrVh8Go262TinqsGVLbgLa5nKBTIG/view?usp=sharing)**
 
-[![Live Demo](https://img.shields.io/badge/▶_TRY_THE_LIVE_DEMO-22c55e?style=for-the-badge)](https://banking-voice-agent-with-intelligent.onrender.com/ui)
-
-
 </div>
 
 ---
+
+### contents
+
+- [what it does](#what-it-does)
+- [how it routes a request](#how-it-routes-a-request)
+- [screenshots](#screenshots)
+- [what i actually measured, not just claimed](#what-i-actually-measured-not-just-claimed)
+- [what i picked and why](#what-i-picked-and-why)
+- [the honest parts — bugs and what's not handled yet](#the-honest-parts)
+- [run it yourself](#run-it-yourself)
+- [file layout](#file-layout)
+
+---
+
+## what it does
 
 ```
 "mera balance kya hai"          →  personal    →  db lookup       →  hindi reply
@@ -53,6 +67,8 @@ flowchart TD
     C -->|smalltalk| K[reset and re greet]
 ```
 
+---
+
 ## screenshots
 
 <table>
@@ -67,6 +83,8 @@ flowchart TD
 </table>
 
 full flow diagram: [assets/flow.svg](assets/flow.svg)
+
+---
 
 ## what i actually measured, not just claimed
 
@@ -83,6 +101,8 @@ ran a real eval harness (`eval_full.py`) through the actual pipeline, real groq 
 
 that 90% escalation number only measures whether the classifier routed an escalate worthy message correctly, not the real world escalation rate, which also includes stuff a single message can't show, like someone failing id verification three times in a row. kept these separate on purpose instead of blending into one number that oversells itself.
 
+---
+
 ## what i picked and why
 
 | piece | using | skipped | why |
@@ -94,7 +114,11 @@ that 90% escalation number only measures whether the classifier routed an escala
 | retrieval cutoff | dynamic drop detection | fixed 0.7 threshold | a flat number works on one dataset and lets garbage through on another |
 | database | Postgres on Neon, pooled | one shared connection, started here | one connection meant every balance check waited in line behind the last one |
 
-## bugs that only showed up once it was live
+---
+
+## the honest parts
+
+### bugs that only showed up once it was live
 
 <details>
 <summary>one shared db connection was quietly making everyone wait</summary>
@@ -121,13 +145,15 @@ the intent router needs the handlers, the handlers need a function back from the
 fixed by importing that one function inside the function body where it's actually used, never at the top.
 </details>
 
-## what's not handled yet
+### what's not handled yet
 
 - **sessions live in memory, per instance.** fine running as one process, which is what this is deployed as. more than one instance and a caller could land somewhere that never saw their session
 - **the db pool is per instance too.** three instances means three separate pools hitting neon, not one shared pool of five
 - **no otp or email check**, customer id against the database is the only identity gate
 - **no automated test suite**, `eval_full.py` checks accuracy and latency, it's an eval harness not unit tests
 - **a local only playback path exists** for testing on my own machine, never runs on the deployed server
+
+---
 
 ## run it yourself
 
@@ -146,6 +172,8 @@ docker run -p 8000:8000 --env-file .env banking-voice-agent
 ```
 
 `connections/connections.py` needs `GROQ_API_KEY`, a pooled Neon `DB_HOST` (the one with `-pooler` in it), and your Vachana keys, all read from `.env`.
+
+---
 
 ## file layout
 
