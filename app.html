@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>XYZ Bank Voice Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --bg-base:        #0a0e17;
+        --bg-panel:        #131a29;
+        --bg-panel-2:      #1a2336;
+        --line:            #232d42;
+        --text-primary:    #e8edf6;
+        --text-muted:      #7c869c;
+        --accent-idle:     #4fd1c5;
+        --accent-listen:   #5fe3d3;
+        --accent-think:    #e8b04b;
+        --accent-speak:    #8b9dff;
+        --danger:          #ff6b6b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        background: var(--bg-base);
+        background-image:
+            radial-gradient(circle at 40% 15%, rgba(79,209,197,0.07), transparent 55%),
+            radial-gradient(circle at 85% 85%, rgba(139,157,255,0.05), transparent 50%);
+        color: var(--text-primary);
+        font-family: 'Inter', sans-serif;
+        height: 100vh;
+        /* fixed: this was min-height, which lets the body keep growing
+           taller than the viewport as sidebar content adds up. flexbox
+           align-items defaults to "stretch", so with no hard cap here the
+           .main-stage column stretched to match the .side-panel's full
+           content height too — which is why the orb kept sinking further
+           down as more metrics turns piled up, and why .side-panel's own
+           overflow-y:auto never actually triggered (it never got taller
+           than its content, so there was nothing to scroll). capping body
+           to the real viewport height forces .side-panel to overflow
+           internally instead of dragging the whole page down with it */
+        display: flex;
+        flex-direction: row;
+        overflow: hidden;
+        position: relative;
+    }
+
+    @media (max-width: 860px) {
+        body { flex-direction: column; overflow-y: auto; height: auto; min-height: 100vh; }
+    }
+
+    /* ---------- top bar ---------- */
+    .topbar {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 26px;
+        z-index: 20;
+        pointer-events: none;
+    }
+    .topbar > * { pointer-events: auto; }
+
+    .brand {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .brand .dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--accent-idle);
+        box-shadow: 0 0 8px var(--accent-idle);
+    }
+    .brand span.sub {
+        color: var(--text-muted);
+        font-weight: 400;
+        font-size: 12px;
+        margin-left: 6px;
+    }
+
+    .db-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 10px;
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    .db-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--text-muted);
+        display: inline-block;
+        flex-shrink: 0;
+        transition: background .3s ease, box-shadow .3s ease;
+    }
+    .db-dot.connected { background: var(--accent-idle); box-shadow: 0 0 6px var(--accent-idle); }
+    .db-dot.disconnected { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+    .topbar-actions { display: flex; gap: 10px; }
+
+    .icon-btn {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        background: var(--bg-panel);
+        color: var(--text-muted);
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        font-size: 15px;
+        transition: border-color .2s, color .2s, transform .15s;
+    }
+    .icon-btn:hover { border-color: var(--accent-idle); color: var(--accent-idle); }
+    .icon-btn:active { transform: scale(0.94); }
+
+    /* ---------- flow diagram modal ---------- */
+    .flow-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease;
+        z-index: 30;
+    }
+    .flow-backdrop.show { opacity: 1; pointer-events: auto; }
+
+    .flow-modal {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -48%);
+        width: min(640px, 90vw);
+        max-height: 82vh;
+        overflow-y: auto;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 26px 28px 28px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+        z-index: 31;
+    }
+    .flow-modal.show {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, -50%);
+    }
+
+    .flow-modal h2 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 16px;
+        margin-bottom: 4px;
+    }
+    .flow-modal .flow-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 20px;
+    }
+
+    .flow-stage {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 13px;
+        text-align: center;
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    .flow-stage .label { font-weight: 600; }
+    .flow-stage .sub-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    .flow-arrow-down {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 14px;
+        margin: 4px 0;
+    }
+
+    .flow-branches {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin: 4px 0;
+    }
+    .flow-branches .flow-stage { font-size: 11.5px; padding: 10px 6px; }
+
+    .flow-stage.active {
+        border-color: var(--accent-idle);
+        box-shadow: 0 0 16px rgba(79,209,197,0.35);
+    }
+    .flow-stage.active .label { color: var(--accent-idle); }
+
+    .flow-close {
+        position: absolute;
+        top: 16px; right: 16px;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 18px;
+        cursor: pointer;
+    }
+    .flow-close:hover { color: var(--text-primary); }
+
+    /* ---------- main stage (orb + status) ---------- */
+    .main-stage {
+        flex: 1;
+        min-width: 0;
+        height: 100vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+    }
+
+    .orb-wrap {
+        position: relative;
+        width: 220px; height: 220px;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+    }
+
+    .ring {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid var(--accent-idle);
+        opacity: 0;
+    }
+
+    .orb {
+        position: relative;
+        width: 148px; height: 148px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.10), transparent 60%),
+                    radial-gradient(circle at 50% 50%, rgba(79,209,197,0.35), rgba(10,14,23,0.9) 70%);
+        border: 1px solid rgba(79,209,197,0.5);
+        box-shadow: 0 0 30px rgba(79,209,197,0.25), inset 0 0 30px rgba(79,209,197,0.08);
+        display: flex; align-items: center; justify-content: center;
+        transition: box-shadow .4s ease, border-color .4s ease, background .4s ease;
+        animation: breathe 3.4s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.035); }
+    }
+
+    .orb svg { width: 46px; height: 46px; stroke: var(--text-primary); opacity: 0.9; }
+
+    .wave { display: none; align-items: flex-end; gap: 4px; height: 34px; }
+    .wave span {
+        width: 4px; border-radius: 2px;
+        background: var(--text-primary);
+        animation: wavebar 1s ease-in-out infinite;
+    }
+    .wave span:nth-child(1){ animation-delay: 0s;   height: 12px;}
+    .wave span:nth-child(2){ animation-delay: .12s; height: 26px;}
+    .wave span:nth-child(3){ animation-delay: .24s; height: 34px;}
+    .wave span:nth-child(4){ animation-delay: .36s; height: 20px;}
+    .wave span:nth-child(5){ animation-delay: .48s; height: 14px;}
+    @keyframes wavebar {
+        0%, 100% { transform: scaleY(0.4); }
+        50%      { transform: scaleY(1); }
+    }
+
+    .orb-wrap.listening .ring {
+        border-color: var(--accent-listen);
+        animation: ripple 1.8s ease-out infinite;
+    }
+    .orb-wrap.listening .ring.r2 { animation-delay: .5s; }
+    .orb-wrap.listening .ring.r3 { animation-delay: 1s; }
+    .orb-wrap.listening .orb {
+        border-color: var(--accent-listen);
+        box-shadow: 0 0 50px rgba(95,227,211,0.45), inset 0 0 30px rgba(95,227,211,0.15);
+        animation: breathe 1.2s ease-in-out infinite;
+    }
+    @keyframes ripple {
+        0%   { width: 148px; height: 148px; opacity: 0.55; }
+        100% { width: 220px; height: 220px; opacity: 0; }
+    }
+
+    .orb-wrap.thinking .orb {
+        border-color: var(--accent-think);
+        box-shadow: 0 0 40px rgba(232,176,75,0.35), inset 0 0 30px rgba(232,176,75,0.12);
+        animation: none;
+    }
+    .orb-wrap.thinking .orb::after {
+        content: "";
+        position: absolute;
+        width: 168px; height: 168px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        border-top-color: var(--accent-think);
+        border-right-color: var(--accent-think);
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .orb-wrap.speaking .orb {
+        border-color: var(--accent-speak);
+        box-shadow: 0 0 45px rgba(139,157,255,0.4), inset 0 0 30px rgba(139,157,255,0.15);
+        animation: breathe 0.9s ease-in-out infinite;
+    }
+    .orb-wrap.speaking .orb svg { display: none; }
+    .orb-wrap.speaking .wave { display: flex; }
+    .orb-wrap.speaking .wave span { background: var(--accent-speak); }
+
+    .orb-wrap.disabled { cursor: not-allowed; }
+
+    .status-block {
+        margin-top: 30px;
+        text-align: center;
+        min-height: 70px;
+    }
+
+    #status-text {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 500;
+        text-transform: uppercase;
+        font-size: 12.5px;
+        letter-spacing: 0.12em;
+        color: var(--text-muted);
+    }
+
+    #transcript {
+        margin-top: 12px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--text-muted);
+        max-width: 480px;
+        min-height: 40px;
+    }
+    #transcript .line-user { color: var(--text-primary); font-weight: 500; }
+    #transcript .line-user::before { content: "You  ·  "; color: var(--accent-listen); font-weight: 600; }
+    #transcript .line-bot::before { content: "Bank  ·  "; color: var(--accent-speak); font-weight: 600; }
+    #transcript .line-bot { color: var(--text-muted); display: block; margin-top: 4px; }
+
+    .fallback-input {
+        margin-top: 22px;
+        display: none;
+        gap: 8px;
+        width: 100%;
+        max-width: 420px;
+    }
+    .fallback-input.show { display: flex; }
+    .fallback-input input {
+        flex: 1;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        padding: 10px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        outline: none;
+        font-family: 'Inter', sans-serif;
+    }
+    .fallback-input input:focus { border-color: var(--accent-idle); }
+    .fallback-input button {
+        background: var(--accent-idle);
+        border: none;
+        color: #06110f;
+        font-weight: 600;
+        padding: 10px 18px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+    }
+
+    .keyboard-toggle {
+        margin-top: 16px;
+        font-size: 12px;
+        color: var(--text-muted);
+        text-decoration: underline;
+        cursor: pointer;
+        opacity: 0.7;
+    }
+    .keyboard-toggle:hover { opacity: 1; }
+
+    /* ---------- side panel: always visible, sits beside the orb ---------- */
+    .side-panel {
+        width: 320px;
+        flex-shrink: 0;
+        height: 100vh;
+        background: var(--bg-panel);
+        border-left: 1px solid var(--line);
+        padding: 78px 22px 24px;
+        overflow-y: auto;
+        transition: width .25s ease, padding .25s ease, opacity .2s ease;
+    }
+    .side-panel.collapsed {
+        width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        opacity: 0;
+        overflow: hidden;
+    }
+
+    @media (max-width: 860px) {
+        .side-panel {
+            width: 100%;
+            border-left: none;
+            border-top: 1px solid var(--line);
+            padding: 20px 20px 30px;
+            height: auto;
+        }
+        .side-panel.collapsed { width: 100%; height: 0; padding: 0; }
+    }
+
+    .side-panel h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 12.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+        margin-top: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .side-panel h3:first-child { margin-top: 0; }
+
+    .panel-toggle {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-decoration: underline;
+        cursor: pointer;
+        text-transform: none;
+        letter-spacing: normal;
+        font-family: 'Inter', sans-serif;
+    }
+    .panel-toggle:hover { color: var(--accent-idle); }
+
+    .reopen-btn {
+        position: fixed;
+        top: 20px; right: 26px;
+        z-index: 25;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        color: var(--text-muted);
+        font-size: 11.5px;
+        padding: 8px 14px;
+        border-radius: 20px;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        gap: 6px;
+    }
+    .reopen-btn.show { display: flex; }
+    .reopen-btn:hover { border-color: var(--accent-idle); color: var(--accent-idle); }
+
+    .example-card {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    .example-card .q {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+    }
+    .example-card .q::before { content: "\201C"; color: var(--accent-idle); }
+    .example-card .q::after { content: "\201D"; color: var(--accent-idle); }
+    .example-card .a { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+    .id-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .id-chip {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 12px;
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        color: var(--accent-idle);
+        padding: 5px 10px;
+        border-radius: 6px;
+    }
+
+    .info-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin-top: 4px; }
+
+    /* ---------- live metrics ---------- */
+    #metrics-content { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .metrics-empty { font-style: italic; opacity: 0.7; }
+
+    .metrics-block {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+    .metrics-block .m-title {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        color: var(--accent-idle);
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+    }
+    .metrics-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11.5px;
+    }
+    .metrics-row .val { color: var(--text-primary); }
+    .metrics-row .val.slow { color: var(--danger); }
+    .metrics-row .val.caution { color: var(--accent-think); }
+    .metrics-total {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed var(--line);
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+    /* ---------- left panel: live flow + avg metrics badge ---------- */
+    .left-panel {
+        width: 210px;
+        flex-shrink: 0;
+        height: 100vh;
+        background: var(--bg-panel);
+        border-right: 1px solid var(--line);
+        padding: 78px 16px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        overflow-y: auto;
+    }
+    /* hidden below ~1000px, a bit earlier than the existing 860px mobile
+       breakpoint for .side-panel — on a narrowed desktop window (not just
+       phones) a second fixed-width panel on the left would start crowding
+       the orb before the existing mobile stacking layout ever kicks in,
+       so this gets a clean buffer of its own instead of sharing one */
+    @media (max-width: 1000px) {
+        .left-panel { display: none; }
+    }
+
+    .left-panel h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+    }
+
+    .lf-stage {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 11.5px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        transition: border-color .2s ease, color .2s ease, box-shadow .2s ease;
+    }
+    .lf-stage.active {
+        border-color: var(--accent-idle);
+        color: var(--text-primary);
+        box-shadow: 0 0 10px rgba(79,209,197,0.25);
+    }
+    .lf-arrow {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 11px;
+        margin: -2px 0 6px;
+    }
+    .lf-branches {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 6px;
+    }
+    .lf-branches .lf-stage {
+        font-size: 11px;
+        padding: 6px 10px;
+        margin-bottom: 0;
+    }
+
+    .avg-badge {
+        cursor: pointer;
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        transition: border-color .2s ease, color .2s ease;
+    }
+    .avg-badge:hover { border-color: var(--accent-idle); }
+    .avg-badge .ab-label {
+        display: block;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+    }
+    .avg-badge .ab-value {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 12.5px;
+        color: var(--text-primary);
+    }
+    .avg-badge .ab-hint {
+        display: block;
+        font-size: 10px;
+        color: var(--text-muted);
+        opacity: 0.65;
+        margin-top: 5px;
+    }
+
+    /* ---------- turn-history table (inside the repurposed modal) ---------- */
+    .turn-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+        font-size: 12px;
+    }
+    .turn-table th, .turn-table td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line);
+    }
+    .turn-table th {
+        color: var(--text-muted);
+        font-weight: 500;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .turn-table td.num { font-family: 'IBM Plex Mono', monospace; }
+    .turn-table td.empty-row { text-align: center; color: var(--text-muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">
+        <span class="dot"></span>
+        XYZ Bank Assistant
+        <span class="sub">voice banking</span>
+        <span class="db-status" id="db-status">
+            <span class="db-dot" id="db-dot"></span>
+            <span id="db-status-text">Checking database...</span>
+        </span>
+    </div>
+    <div class="topbar-actions"></div>
+</div>
+
+<button class="reopen-btn" id="reopen-btn">&#8592; show examples &amp; metrics</button>
+
+<div class="left-panel" id="left-panel">
+    <div>
+        <h3>Live flow</h3>
+        <div class="lf-stage" id="lf-speech">Speech / typed text</div>
+        <div class="lf-arrow">&#8595;</div>
+        <div class="lf-stage" id="lf-processing">/chat + Intent</div>
+        <div class="lf-arrow">&#8595;</div>
+        <div class="lf-branches">
+            <div class="lf-stage" id="lf-branch-personal">Personal</div>
+            <div class="lf-stage" id="lf-branch-general">General</div>
+            <div class="lf-stage" id="lf-branch-escalate">Escalate</div>
+            <div class="lf-stage" id="lf-branch-smalltalk">Smalltalk</div>
+        </div>
+        <div class="lf-arrow">&#8595;</div>
+        <div class="lf-stage" id="lf-speak">/speak + Playback</div>
+    </div>
+
+    <div class="avg-badge" id="avg-badge" title="Click for full session metrics">
+        <span class="ab-label">Session avg</span>
+        <span class="ab-value" id="avg-badge-text">No calls yet</span>
+        <span class="ab-hint">tap for full breakdown &#8594;</span>
+    </div>
+</div>
+
+<div class="main-stage">
+    <div class="orb-wrap" id="orb-wrap">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="orb" id="orb">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+    </div>
+
+    <div class="status-block">
+        <div id="status-text">Tap to speak</div>
+        <div id="transcript"></div>
+    </div>
+
+    <div class="keyboard-toggle" id="keyboard-toggle">or type your question instead</div>
+    <div class="fallback-input" id="fallback-input">
+        <input id="user-input" type="text" placeholder="Type your question..." />
+        <button id="send-btn">Send</button>
+    </div>
+</div>
+
+<div class="side-panel" id="side-panel">
+    <h3>Live metrics <span class="panel-toggle" id="hide-toggle">hide</span></h3>
+    <div id="metrics-content"><span class="metrics-empty">Ask a question to see timings here.</span></div>
+
+    <h3>Model accuracy</h3>
+    <div class="metrics-block">
+        <div class="metrics-row"><span>Intent accuracy</span><span class="val">~95%</span></div>
+        <div class="metrics-row"><span>DB fetch success</span><span class="val">100%</span></div>
+        <div class="metrics-row"><span>KB retrieval accuracy</span><span class="val">90%</span></div>
+    </div>
+    <div class="info-note">From an offline test run against 95 seeded test cases — static, not live per-call data.</div>
+
+    <h3>Demo customer IDs</h3>
+    <div class="id-chips">
+        <span class="id-chip">CU001</span>
+        <span class="id-chip">CU002</span>
+        <span class="id-chip">CU003</span>
+        <span class="id-chip">CU004</span>
+        <span class="id-chip">CU005</span>
+        <span class="id-chip">CU006</span>
+        <span class="id-chip">CU007</span>
+    </div>
+    <div class="info-note">Use one of these when the assistant asks you to verify your identity for an account or loan question.</div>
+
+    <h3>Try asking</h3>
+    <div class="info-note" style="margin-bottom: 10px;">Speaks and understands English, Hindi, and Telugu — typed in English letters is fine, no need to switch keyboards.</div>
+    <div class="example-card">
+        <div class="q">What is my account balance?</div>
+        <div class="a">Reads back your current balance once your customer ID is verified.</div>
+    </div>
+    <div class="example-card">
+        <div class="q">What is the minimum balance for a savings account?</div>
+        <div class="a">General bank policy — answered without needing your ID.</div>
+    </div>
+    <div class="example-card">
+        <div class="q">When is my EMI due?</div>
+        <div class="a">Looks up your loan record after ID verification.</div>
+    </div>
+    <div class="example-card">
+        <div class="q">I want to speak to a representative</div>
+        <div class="a">Escalates you to a human agent.</div>
+    </div>
+    <div class="example-card">
+        <div class="q">mera balance kya hai</div>
+        <div class="a">Hindi, typed in English letters — replies back in Hindi.</div>
+    </div>
+    <div class="example-card">
+        <div class="q">naaku na balance cheppandi</div>
+        <div class="a">Telugu, typed in English letters — replies back in Telugu.</div>
+    </div>
+</div>
+
+<div class="flow-backdrop" id="metrics-backdrop"></div>
+<div class="flow-modal" id="metrics-modal">
+    <button class="flow-close" id="metrics-close">&#10005;</button>
+    <h2>Session metrics</h2>
+    <div class="flow-sub">Every turn this call, in order.</div>
+
+    <div id="modal-session-summary"></div>
+
+    <table class="turn-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Intent</th>
+                <th>Conf.</th>
+                <th>Language</th>
+                <th>Chat</th>
+                <th>TTS RTF</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="turn-history-body"></tbody>
+    </table>
+</div>
+
+<script>
+    const API = window.location.origin;
+    // fixed for deployment: this was hardcoded to "http://127.0.0.1:8000",
+    // which only works when the browser and server are on the same machine
+    // during local dev. app.py serves this HTML file AND the /session,
+    // /chat, /speak endpoints from the same FastAPI process, so wherever
+    // this page is actually loaded from IS the right API host — using
+    // window.location.origin means this works unchanged whether it's
+    // running on localhost, a Railway/Render/Fly URL, or a custom domain,
+    // with zero config needed per environment
+    // ---- everything below preserves the original API contract:
+    // POST /session -> { session_id }
+    // POST /chat    -> { response, ended, metrics }   (metrics is new, additive)
+    // POST /speak   -> streaming raw PCM chunks
+    // only the UI/state-machine driving these calls has changed
+
+    const GREETING_TEXT = "Hello, welcome to XYZ Bank. I am your bank assistant. Ask me anything about your account.";
+    // matches new_conversation()'s seeded history line in app.py, so what's
+    // shown in the transcript and what gets spoken out loud are the same text
+
+    let sessionId        = null;
+    let recognition      = null;
+    let appState         = "idle"; // idle | listening | thinking | speaking
+    let silenceTimer     = null;
+    let gotSpeechResult  = false;
+    let hasSpokenGreeting = false;
+
+    const SILENCE_TIMEOUT_MS = 7000;
+    // if the mic is open (button press OR auto-restart after a response)
+    // and nothing is heard within this window, we stop listening and drop
+    // back to idle instead of leaving the mic open forever
+
+    const CONFIDENCE_THRESHOLD = 0.7;
+    // mirrors CONFIDENCE_THRESHOLD in llm_intent.py — used purely client-side
+    // to flag a turn as "low confidence" for the accuracy proxy below. this
+    // is the same threshold the backend itself uses to decide whether to
+    // trust its own classification, so a turn under this line is exactly
+    // the turns where the backend fell through to its "I'm not sure I
+    // understood that" fallback response regardless of which intent it
+    // guessed
+
+    const orbWrap    = document.getElementById("orb-wrap");
+    const statusText = document.getElementById("status-text");
+    const transcript = document.getElementById("transcript");
+
+    function setState(state) {
+        appState = state;
+        orbWrap.classList.remove("listening", "thinking", "speaking", "disabled");
+        if (state === "listening") { orbWrap.classList.add("listening"); statusText.textContent = "Listening..."; }
+        else if (state === "thinking") { orbWrap.classList.add("thinking", "disabled"); statusText.textContent = "Thinking..."; }
+        else if (state === "speaking") { orbWrap.classList.add("speaking", "disabled"); statusText.textContent = "Speaking..."; }
+        else { statusText.textContent = "Tap to speak"; }
+        updateLiveFlow(state);
+    }
+
+    function updateLiveFlow(state) {
+        // this is what makes the left widget genuinely "live" — it moves the
+        // instant appState changes (mic tap, response back, audio playing),
+        // not just once a whole turn has finished
+        document.querySelectorAll(".lf-stage").forEach(el => el.classList.remove("active"));
+
+        if (state === "listening") {
+            document.getElementById("lf-speech").classList.add("active");
+        } else if (state === "thinking") {
+            document.getElementById("lf-processing").classList.add("active");
+        } else if (state === "speaking") {
+            document.getElementById("lf-speak").classList.add("active");
+        }
+
+        // the branch (personal/general/escalate/smalltalk) reflects the last
+        // known classification and stays highlighted through both "thinking"
+        // and "speaking" — it's not reset to nothing just because the mic
+        // isn't the active stage anymore, since it's still the relevant
+        // context for what's currently being processed or spoken
+        if (state === "thinking" || state === "speaking") {
+            const intent = lastChatMetrics?.intent?.intent;
+            const branchId = {
+                personal  : "lf-branch-personal",
+                general   : "lf-branch-general",
+                escalate  : "lf-branch-escalate",
+                smalltalk : "lf-branch-smalltalk"
+            }[intent];
+            if (branchId) document.getElementById(branchId).classList.add("active");
+        }
+    }
+
+    function setTranscript(userText, botText) {
+        transcript.innerHTML = "";
+        if (userText) {
+            const u = document.createElement("div");
+            u.className = "line-user";
+            u.textContent = userText;
+            transcript.appendChild(u);
+        }
+        if (botText) {
+            const b = document.createElement("div");
+            b.className = "line-bot";
+            b.textContent = botText;
+            transcript.appendChild(b);
+        }
+    }
+
+    // ---------------- live metrics panel ----------------
+    let lastChatMetrics = null; // from the /chat response (backend timings)
+    let lastTtsMetrics  = null; // measured client-side while streaming /speak audio
+
+    // session-level running history, so the panel can show "typical"
+    // performance across the whole call instead of only ever the latest
+    // turn. kept in memory only — resets with a fresh /session, which is
+    // fine since a new call is a new session anyway.
+    let chatTotalsMs = []; // one entry per completed /chat turn
+    let ttsRtfs       = []; // one entry per completed /speak stream
+    let turnHistory   = [];
+    // one entry per completed turn (chat + tts merged), just for the modal's
+    // table — chatTotalsMs/ttsRtfs above already handle the aggregate avg
+    // numbers, this is purely for showing the turn-by-turn breakdown
+
+    function avg(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
+    function max(arr) { return Math.max(...arr); }
+
+    function renderSessionSummary() {
+        if (chatTotalsMs.length === 0 && ttsRtfs.length === 0) return "";
+
+        let html = '<div class="metrics-block"><div class="m-title"><span>session avg</span></div>';
+        if (chatTotalsMs.length > 0) {
+            html += `<div class="metrics-row"><span>turns</span><span class="val">${chatTotalsMs.length}</span></div>`;
+            html += `<div class="metrics-row"><span>avg chat total</span><span class="val">${Math.round(avg(chatTotalsMs))} ms</span></div>`;
+            html += `<div class="metrics-row"><span>worst chat total</span><span class="val">${Math.round(max(chatTotalsMs))} ms</span></div>`;
+        }
+        if (ttsRtfs.length > 0) {
+            const avgRtf = avg(ttsRtfs);
+            const worstRtf = max(ttsRtfs);
+            html += `<div class="metrics-row"><span>avg TTS RTF</span><span class="val ${avgRtf > 1.0 ? 'slow' : ''}">${avgRtf.toFixed(2)}x</span></div>`;
+            html += `<div class="metrics-row"><span>worst TTS RTF</span><span class="val ${worstRtf > 1.0 ? 'slow' : ''}">${worstRtf.toFixed(2)}x</span></div>`;
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function renderAccuracyProxy() {
+        // NOT a measure of whether answers were actually correct — there's no
+        // ground truth available at runtime to check that against. this is a
+        // proxy built entirely from data the system already produces: how
+        // confident the classifier was, and how often the bot had to give up
+        // and escalate instead of answering directly
+        if (turnHistory.length === 0) return "";
+
+        const total          = turnHistory.length;
+        const withConfidence = turnHistory.filter(t => typeof t.confidence === "number");
+        const avgConf        = withConfidence.length > 0 ? avg(withConfidence.map(t => t.confidence)) : null;
+        const escalatedCount = turnHistory.filter(t => t.flag === "escalated").length;
+        const lowConfCount   = turnHistory.filter(t => t.flag === "low_confidence").length;
+
+        let html = '<div class="metrics-block"><div class="m-title"><span>accuracy proxy</span></div>';
+        if (avgConf !== null) {
+            html += `<div class="metrics-row"><span>avg confidence</span><span class="val">${(avgConf * 100).toFixed(0)}%</span></div>`;
+        }
+        html += `<div class="metrics-row"><span>escalated</span><span class="val ${escalatedCount > 0 ? 'slow' : ''}">${escalatedCount}/${total} (${Math.round(escalatedCount / total * 100)}%)</span></div>`;
+        html += `<div class="metrics-row"><span>low confidence / unclear</span><span class="val ${lowConfCount > 0 ? 'caution' : ''}">${lowConfCount}/${total} (${Math.round(lowConfCount / total * 100)}%)</span></div>`;
+        html += '<div class="info-note" style="margin-top: 8px;">Proxy only — reflects classifier confidence and escalation rate, not verified answer correctness.</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderMetrics() {
+        const el = document.getElementById("metrics-content");
+        if (!lastChatMetrics && !lastTtsMetrics) {
+            el.innerHTML = '<span class="metrics-empty">Ask a question to see timings here.</span>';
+            return;
+        }
+
+        let html = renderSessionSummary();
+
+        if (lastChatMetrics) {
+            const intentInfo = lastChatMetrics.intent;
+            html += '<div class="metrics-block"><div class="m-title"><span>/chat</span></div>';
+            if (intentInfo) {
+                const staleTag = intentInfo.classified_this_turn === false ? " (carried over)" : "";
+                html += `<div class="metrics-row"><span>intent</span><span class="val">${intentInfo.intent}${staleTag}</span></div>`;
+                html += `<div class="metrics-row"><span>confidence</span><span class="val">${(intentInfo.confidence ?? 0).toFixed(2)}</span></div>`;
+                html += `<div class="metrics-row"><span>language</span><span class="val">${intentInfo.language}</span></div>`;
+            }
+            (lastChatMetrics.stages || []).forEach(stage => {
+                const slow = stage.seconds > 1.0 ? "slow" : "";
+                html += `<div class="metrics-row"><span>${stage.label}</span><span class="val ${slow}">${stage.seconds.toFixed(2)}s</span></div>`;
+            });
+            html += `<div class="metrics-total"><span>total</span><span>${lastChatMetrics.total_ms} ms</span></div>`;
+            html += '</div>';
+        }
+
+        if (lastTtsMetrics) {
+            const rtfSlow = lastTtsMetrics.rtf > 1.0 ? "slow" : "";
+            html += '<div class="metrics-block"><div class="m-title"><span>/speak (TTS)</span></div>';
+            html += `<div class="metrics-row"><span>time to first chunk</span><span class="val">${lastTtsMetrics.firstChunkMs} ms</span></div>`;
+            html += `<div class="metrics-row"><span>total stream time</span><span class="val">${lastTtsMetrics.totalMs} ms</span></div>`;
+            html += `<div class="metrics-row"><span>audio duration</span><span class="val">${lastTtsMetrics.audioDurationS.toFixed(2)}s</span></div>`;
+            html += `<div class="metrics-row"><span>real-time factor</span><span class="val ${rtfSlow}">${lastTtsMetrics.rtf.toFixed(2)}x</span></div>`;
+            html += '</div>';
+        }
+
+        el.innerHTML = html;
+    }
+
+    // ---------------- side panel show/hide ----------------
+    const sidePanel = document.getElementById("side-panel");
+    const reopenBtn = document.getElementById("reopen-btn");
+    const hideToggle = document.getElementById("hide-toggle");
+
+    hideToggle.addEventListener("click", () => {
+        sidePanel.classList.add("collapsed");
+        reopenBtn.classList.add("show");
+    });
+    reopenBtn.addEventListener("click", () => {
+        sidePanel.classList.remove("collapsed");
+        reopenBtn.classList.remove("show");
+    });
+    // panel is visible by default on load — nothing hidden behind an icon
+    // the user has to already know exists
+
+    async function startSession() {
+        const res  = await fetch(`${API}/session`, { method: "POST" });
+        const data = await res.json();
+        sessionId  = data.session_id;
+        setTranscript(null, GREETING_TEXT);
+        setState("idle");
+        // greeting is NOT spoken yet here — browsers block audio autoplay
+        // before any user gesture. it gets spoken on the user's first tap
+        // of the orb instead (see orbWrap click handler below)
+    }
+
+    async function handleUserText(text) {
+        if (!text || !sessionId || appState === "thinking" || appState === "speaking") return;
+
+        clearSilenceTimer();
+        setTranscript(text, null);
+        setState("thinking");
+
+        const chatStart = performance.now();
+
+        try {
+            const res  = await fetch(`${API}/chat`, {
+                method  : "POST",
+                headers : { "Content-Type": "application/json" },
+                body    : JSON.stringify({ session_id: sessionId, text: text })
+            });
+            const data = await res.json();
+
+            console.log(`[timing] chat round trip: ${(performance.now() - chatStart).toFixed(0)}ms`);
+
+            if (data.error) {
+                setTranscript(text, "Session expired. Starting a new session...");
+                await startSession();
+                return;
+            }
+
+            let chatSnapshot = null;
+            if (data.metrics) {
+                lastChatMetrics = data.metrics;
+                chatSnapshot    = data.metrics;
+                chatTotalsMs.push(data.metrics.total_ms);
+                renderMetrics();
+                renderAvgBadge();
+            }
+
+            setTranscript(text, data.response);
+
+            const ttsBeforeCall = lastTtsMetrics;
+            // snapshotting the reference before the call, not just assuming
+            // speakResponse succeeded — if it fails/aborts, lastTtsMetrics
+            // never gets reassigned, so comparing the reference afterwards
+            // tells us whether this turn actually produced a fresh
+            // measurement or whether we'd otherwise be attaching a stale
+            // one left over from a previous turn to this turn's row
+            await speakResponse(data.response);
+            const ttsForThisTurn = (lastTtsMetrics !== ttsBeforeCall) ? lastTtsMetrics : null;
+
+            // ---- accuracy proxy: flag this turn, purely from data we already have ----
+            // there's no ground truth at runtime to check whether the intent
+            // classification or the answer itself was actually *correct* — that
+            // needs a human to say so. what we CAN measure honestly from data
+            // already in hand:
+            //   "escalated"      -> escalate.py's response is a fixed sentence
+            //                       containing "ticket ID is", whether the escalation
+            //                       came from the classifier picking "escalate" directly
+            //                       OR from personal.py/smalltalk.py exhausting their
+            //                       retry limits and escalating internally — either way,
+            //                       the bot couldn't resolve the request on its own
+            //   "low_confidence" -> confidence fell under the same CONFIDENCE_THRESHOLD
+            //                       the backend itself uses, meaning llm_intent.py fell
+            //                       through to its "I'm not sure I understood that"
+            //                       fallback regardless of which intent it guessed
+            //   "ok"             -> neither of the above happened
+            const confidenceVal = chatSnapshot?.intent?.confidence ?? null;
+            const wasEscalated  = typeof data.response === "string" && data.response.includes("ticket ID is");
+            const wasLowConf    = confidenceVal !== null && confidenceVal < CONFIDENCE_THRESHOLD;
+            const turnFlag      = wasEscalated ? "escalated" : (wasLowConf ? "low_confidence" : "ok");
+
+            turnHistory.push({
+                n               : turnHistory.length + 1,
+                intent          : chatSnapshot?.intent?.intent ?? "—",
+                confidence      : chatSnapshot?.intent?.confidence,
+                language        : chatSnapshot?.intent?.language ?? "—",
+                flag            : turnFlag,
+                chatMs          : chatSnapshot?.total_ms,
+                ttsRtf          : ttsForThisTurn?.rtf,
+                ttsFirstChunkMs : ttsForThisTurn?.firstChunkMs
+            });
+            // additive only — this is purely for the modal's turn-by-turn
+            // table, nothing about routing or playback reads this back
+
+            if (data.ended) {
+                setTimeout(() => startSession(), 1500);
+                return;
+            }
+
+            // response finished playing -> automatically start listening again
+            // so the caller can just keep talking without touching the button
+            startListening(/*auto=*/true);
+
+        } catch (e) {
+            console.error("[error] chat failed:", e);
+            setTranscript(text, "Something went wrong. Please try again.");
+            setState("idle");
+        }
+    }
+
+    async function speakResponse(text) {
+        // streams raw PCM from /speak and schedules it through Web Audio API
+        // for low-latency playback. also times the stream client-side so the
+        // live metrics panel can show TTS latency/RTF without needing any
+        // backend change — the browser already sees every byte as it arrives.
+        try {
+            setState("speaking");
+
+            const ttsStart = performance.now();
+            let firstChunkMs = null;
+            let totalBytes = 0;
+
+            // fixed: fetch() resolves as soon as response HEADERS arrive —
+            // FastAPI's StreamingResponse sends a 200 OK immediately, before
+            // any audio bytes exist. if the server-side TTS call then hangs
+            // (Vachana API stalls, network drop, etc) and never yields a
+            // single chunk, `await reader.read()` below waits forever with
+            // no exception and no timeout — nothing for a catch block to
+            // ever see, so the orb was stuck on "Speaking..." with no way
+            // to recover short of a page refresh.
+            //
+            // this is a STALL timer, not a fixed ceiling: it resets every
+            // time a chunk actually arrives, so a long legitimate answer
+            // being spoken doesn't get killed just for taking a while
+            // overall — only real silence (no bytes at all for this long)
+            // triggers the abort.
+            const TTS_STALL_TIMEOUT_MS = 8000;
+            const abortController = new AbortController();
+            let stallTimer = null;
+            function resetStallTimer() {
+                if (stallTimer) clearTimeout(stallTimer);
+                stallTimer = setTimeout(() => abortController.abort(), TTS_STALL_TIMEOUT_MS);
+            }
+            resetStallTimer(); // covers "headers arrive but body never starts"
+
+            const res = await fetch(`${API}/speak`, {
+                method  : "POST",
+                headers : { "Content-Type": "application/json" },
+                body    : JSON.stringify({ text: text }),
+                signal  : abortController.signal
+            });
+
+            if (!res.ok) {
+                console.error("[error] /speak returned status", res.status);
+                // fixed: this used to return here with appState still stuck
+                // at "speaking" — and startListening() refuses to do
+                // anything while appState is "speaking", so the orb was
+                // left showing "Speaking..." forever with nothing playing
+                // and nothing to recover except a page refresh
+                setState("idle");
+                return;
+            }
+
+            const audioContext = new AudioContext({ sampleRate: 44100 });
+            const reader = res.body.getReader();
+
+            let nextStartTime  = null;
+            let leftover       = new Uint8Array(0);
+            const PREBUFFER_CHUNKS = 2;
+            let pendingBuffers = [];
+            let chunkIndex     = 0;
+
+            function scheduleBuffer(buffer) {
+                if (nextStartTime === null) {
+                    nextStartTime = audioContext.currentTime + 0.25;
+                }
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(nextStartTime);
+                nextStartTime += buffer.duration;
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                resetStallTimer(); // saw a chunk -> push the deadline out again
+
+                if (firstChunkMs === null) {
+                    firstChunkMs = performance.now() - ttsStart;
+                }
+                totalBytes += value.length;
+
+                const combined = new Uint8Array(leftover.length + value.length);
+                combined.set(leftover);
+                combined.set(value, leftover.length);
+
+                const numSamples   = Math.floor(combined.length / 2);
+                const usableLength = numSamples * 2;
+                leftover = combined.slice(usableLength);
+                if (numSamples === 0) continue;
+
+                const int16View   = new Int16Array(combined.buffer, 0, numSamples);
+                const float32Data = new Float32Array(numSamples);
+                for (let i = 0; i < numSamples; i++) {
+                    float32Data[i] = int16View[i] / 32768;
+                }
+
+                const buffer = audioContext.createBuffer(1, numSamples, 44100);
+                buffer.getChannelData(0).set(float32Data);
+
+                chunkIndex++;
+                if (chunkIndex <= PREBUFFER_CHUNKS) {
+                    pendingBuffers.push(buffer);
+                    if (chunkIndex === PREBUFFER_CHUNKS) {
+                        for (const buf of pendingBuffers) scheduleBuffer(buf);
+                        pendingBuffers = [];
+                    }
+                    continue;
+                }
+                scheduleBuffer(buffer);
+            }
+
+            for (const buf of pendingBuffers) scheduleBuffer(buf);
+            pendingBuffers = [];
+            clearTimeout(stallTimer); // stream finished cleanly, no need to keep watching for a stall
+
+            const totalMs = performance.now() - ttsStart;
+            const audioDurationS = totalBytes / 2 / 44100;
+            lastTtsMetrics = {
+                firstChunkMs : Math.round(firstChunkMs ?? totalMs),
+                totalMs      : Math.round(totalMs),
+                audioDurationS,
+                rtf          : audioDurationS > 0 ? (totalMs / 1000) / audioDurationS : 0
+            };
+            if (audioDurationS > 0) ttsRtfs.push(lastTtsMetrics.rtf);
+            // only count real audio streams — a zero-duration stream (e.g.
+            // the greeting somehow returning nothing) would divide-by-zero
+            // its way to a meaningless 0.00x dragging the average down
+            renderMetrics();
+            renderAvgBadge();
+
+            if (nextStartTime !== null) {
+                const remaining = nextStartTime - audioContext.currentTime;
+                if (remaining > 0) {
+                    await new Promise(resolve => setTimeout(resolve, remaining * 1000));
+                }
+            }
+            await audioContext.close();
+
+            setState("idle");
+            // playback genuinely finished — without this, appState stays
+            // stuck at "speaking" forever (even on success, not just on
+            // error), and startListening() refuses to do anything while
+            // appState is "speaking". this line got dropped during the
+            // rewrite that added the sidebar/metrics/greeting flow, which
+            // is exactly why every normal speak call — not just failed
+            // ones — was leaving the orb stuck.
+
+        } catch (e) {
+            if (e.name === "AbortError") {
+                console.error("[error] /speak stalled — no audio data arrived in time, aborted");
+            } else {
+                console.error("[error] speakResponse failed:", e);
+            }
+            // same fix as the !res.ok branch above: any failure here used
+            // to leave appState stuck at "speaking", which then silently
+            // blocked the next startListening() call from doing anything
+            setState("idle");
+        }
+    }
+
+    function clearSilenceTimer() {
+        if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+    }
+
+    function startListening(auto = false) {
+        if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+            if (!auto) showFallbackInput();
+            setState("idle");
+            return;
+        }
+
+        if (appState === "thinking" || appState === "speaking") return;
+
+        const SpeechRecognition     = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition                 = new SpeechRecognition();
+        recognition.lang            = "en-IN";
+        recognition.interimResults  = false;
+        recognition.maxAlternatives = 1;
+
+        gotSpeechResult = false;
+
+        recognition.onstart = () => {
+            setState("listening");
+            clearSilenceTimer();
+            silenceTimer = setTimeout(() => {
+                if (recognition) recognition.stop();
+            }, SILENCE_TIMEOUT_MS);
+        };
+
+        recognition.onresult = (event) => {
+            gotSpeechResult = true;
+            clearSilenceTimer();
+            const text = event.results[0][0].transcript;
+            console.log(`[stt] recognised: "${text}"`);
+            handleUserText(text);
+        };
+
+        recognition.onerror = (event) => {
+            console.error("[error] speech recognition:", event.error);
+            // fixed: this used to only log, leaving the orb showing
+            // "Listening..." forever with a dead mic whenever recognition
+            // failed (most commonly: the auto-restart right after the bot
+            // finishes speaking gets rejected because it has no fresh user
+            // gesture behind it). now every error drops straight back to
+            // idle so there is always a working button to tap, instead of
+            // a stuck orb that needs a page refresh to recover from.
+            clearSilenceTimer();
+            gotSpeechResult = true; // prevents onend from doing a redundant reset
+            setState("idle");
+        };
+
+        recognition.onend = () => {
+            clearSilenceTimer();
+            if (!gotSpeechResult) {
+                setState("idle");
+            }
+        };
+
+        try {
+            recognition.start();
+        } catch (e) {
+            // start() can throw synchronously (already-started, or a
+            // browser refusing a gesture-less restart) — an uncaught throw
+            // here used to skip onstart entirely and leave the orb showing
+            // whatever state it was already in
+            console.error("[error] recognition.start() failed:", e);
+            setState("idle");
+        }
+    }
+
+    function stopListening() {
+        clearSilenceTimer();
+        if (recognition) recognition.stop();
+    }
+
+    orbWrap.addEventListener("click", async () => {
+        if (appState === "thinking" || appState === "speaking") return;
+        if (appState === "listening") { stopListening(); return; }
+
+        if (!hasSpokenGreeting) {
+            // this first tap IS the user gesture the browser needs before
+            // it will let us play any audio at all — so we use it to speak
+            // the greeting the user was missing, then go straight into
+            // listening for their actual question
+            hasSpokenGreeting = true;
+            await speakResponse(GREETING_TEXT);
+        }
+
+        startListening(false);
+    });
+
+    // ---- fallback text input (accessibility / non-Chrome browsers) ----
+    const keyboardToggle = document.getElementById("keyboard-toggle");
+    const fallbackInput  = document.getElementById("fallback-input");
+    const userInput      = document.getElementById("user-input");
+    const sendBtn        = document.getElementById("send-btn");
+
+    function showFallbackInput() {
+        fallbackInput.classList.add("show");
+        keyboardToggle.style.display = "none";
+    }
+
+    // ---- avg metrics badge (left panel) ----
+    function renderAvgBadge() {
+        const el = document.getElementById("avg-badge-text");
+        if (chatTotalsMs.length === 0) {
+            el.textContent = "No calls yet";
+            return;
+        }
+        const avgMs = Math.round(avg(chatTotalsMs));
+        const rtfPart = ttsRtfs.length > 0 ? ` · ${avg(ttsRtfs).toFixed(2)}x RTF` : "";
+        el.textContent = `Avg ${avgMs}ms${rtfPart}`;
+    }
+    renderAvgBadge(); // shows "No calls yet" immediately on load
+
+    // ---- metrics modal (repurposed from the old static pipeline diagram) ----
+    // opened by clicking the avg badge instead of a topbar button, and shows
+    // the full session summary (reusing renderSessionSummary(), already
+    // built for the sidebar) plus a turn-by-turn history table
+    const metricsBackdrop = document.getElementById("metrics-backdrop");
+    const metricsModal    = document.getElementById("metrics-modal");
+    const metricsClose    = document.getElementById("metrics-close");
+    const avgBadge        = document.getElementById("avg-badge");
+
+    function renderTurnHistoryTable() {
+        const body = document.getElementById("turn-history-body");
+        if (turnHistory.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="empty-row">No turns yet</td></tr>';
+            return;
+        }
+        const statusLabel = { ok: "OK", low_confidence: "Unclear", escalated: "Escalated" };
+        const statusColor  = { ok: "var(--accent-idle)", low_confidence: "var(--accent-think)", escalated: "var(--danger)" };
+        body.innerHTML = turnHistory.map(t => `
+            <tr>
+                <td class="num">${t.n}</td>
+                <td>${t.intent}</td>
+                <td class="num">${(t.confidence ?? 0).toFixed(2)}</td>
+                <td>${t.language}</td>
+                <td class="num">${t.chatMs != null ? t.chatMs + " ms" : "—"}</td>
+                <td class="num">${t.ttsRtf != null ? t.ttsRtf.toFixed(2) + "x" : "—"}</td>
+                <td style="color: ${statusColor[t.flag] || 'var(--text-muted)'}">${statusLabel[t.flag] || "—"}</td>
+            </tr>
+        `).join("");
+    }
+
+    function openMetricsModal() {
+        const summaryHtml  = renderSessionSummary();
+        const accuracyHtml = renderAccuracyProxy();
+        document.getElementById("modal-session-summary").innerHTML =
+            (summaryHtml + accuracyHtml) || '<span class="metrics-empty">No data yet</span>';
+        renderTurnHistoryTable();
+        metricsBackdrop.classList.add("show");
+        metricsModal.classList.add("show");
+    }
+    function closeMetricsModal() {
+        metricsBackdrop.classList.remove("show");
+        metricsModal.classList.remove("show");
+    }
+    avgBadge.addEventListener("click", openMetricsModal);
+    metricsClose.addEventListener("click", closeMetricsModal);
+    metricsBackdrop.addEventListener("click", closeMetricsModal);
+
+    keyboardToggle.addEventListener("click", showFallbackInput);
+    sendBtn.addEventListener("click", () => {
+        const text = userInput.value.trim();
+        if (!text) return;
+        userInput.value = "";
+        handleUserText(text);
+    });
+    userInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendBtn.click();
+    });
+
+    // ---- DB connection status (topbar) ----
+    // purely informational, read-only — doesn't touch sessions/chat/mic at all
+    async function checkDbStatus() {
+        const dot  = document.getElementById("db-dot");
+        const text = document.getElementById("db-status-text");
+        try {
+            const res  = await fetch(`${API}/health`);
+            const data = await res.json();
+            if (data.db_connected) {
+                dot.className  = "db-dot connected";
+                text.textContent = "Neon connected";
+                // spelled out directly instead of only being a colored dot
+                // with a hover tooltip — a glowing dot with no label doesn't
+                // mean anything to someone who wasn't told what it tracks,
+                // this way it's readable at a glance without hovering at all
+            } else {
+                dot.className  = "db-dot disconnected";
+                text.textContent = "Database unreachable";
+            }
+        } catch (e) {
+            // /health itself didn't respond — treat the same as disconnected,
+            // since either way personal lookups won't work right now
+            dot.className  = "db-dot disconnected";
+            text.textContent = "Database unreachable";
+        }
+    }
+    checkDbStatus();
+    setInterval(checkDbStatus, 30000);
+    // rechecked every 30s rather than just once on load — a connection that
+    // was fine at page load can still drop later (Neon can recycle idle
+    // connections), so this keeps the dot honest for the whole session,
+    // not just a snapshot from the moment the page opened
+
+    startSession();
+</script>
+
+</body>
+</html>

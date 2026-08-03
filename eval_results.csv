@@ -1,0 +1,96 @@
+message,true_intent,pred_intent,intent_correct,true_language,pred_language,lang_correct,confidence,classify_seconds,db_seconds,db_success,kb_section_correct,kb_seconds
+what is my account balance,personal,personal,True,english,english,True,0.98,0.781,0.04,True,,
+what is my current EMI amount,personal,personal,True,english,english,True,0.98,1.391,0.01,True,,
+when is my EMI due,personal,personal,True,english,english,True,0.96,0.685,0.004,True,,
+what is my loan outstanding amount,personal,personal,True,english,english,True,0.97,0.622,0.008,True,,
+what type of account do I have,personal,personal,True,english,english,True,0.98,0.601,0.009,True,,
+is my account active right now,personal,personal,True,english,english,True,0.96,0.587,0.009,True,,
+what is the minimum balance in my account,personal,general,False,english,english,True,0.97,0.652,0.008,True,,
+what is my loan status,personal,personal,True,english,english,True,0.95,0.598,0.008,True,,
+how much is my principal loan amount,personal,personal,True,english,english,True,0.95,6.789,0.004,True,,
+what is my registered phone number,personal,personal,True,english,english,True,0.96,0.623,0.008,True,,
+what is my registered email address,personal,personal,True,english,english,True,0.97,9.744,0.007,True,,
+what kind of loan do I have,personal,personal,True,english,english,True,0.97,8.808,0.006,True,,
+correct bank balance in my account please,personal,personal,True,english,english,True,0.95,9.861,0.002,True,,
+kindly do the needful and tell me my EMI due date,personal,personal,True,english,english,True,0.97,9.837,0.002,True,,
+mera account balance kya hai,personal,personal,True,hindi,hinglish,False,0.96,1.912,0.008,True,,
+mera EMI kab due hai,personal,personal,True,hindi,hinglish,False,0.96,11.182,0.01,True,,
+mera loan status kya hai,personal,personal,True,hindi,hinglish,False,0.98,10.106,0.01,True,,
+mera phone number kya hai registered,personal,personal,True,hindi,hinglish,False,0.96,10.377,0.007,True,,
+can you check mera balance please,personal,personal,True,hinglish,hinglish,True,0.95,4.198,0.008,True,,
+please check karke batao mera EMI amount,personal,personal,True,hinglish,hinglish,True,0.95,9.4,0.008,True,,
+mujhe mera loan outstanding amount batao,personal,personal,True,hinglish,hinglish,True,0.96,1.825,0.008,True,,
+naaku na account balance cheppandi,personal,personal,True,telugu,telugu,True,0.96,10.169,0.007,True,,
+naaku loan status enti cheppandi,personal,personal,True,telugu,telugu,True,0.96,2.969,0.005,True,,
+naaku na EMI eppudu due avuthundi cheppandi,personal,personal,True,telugu,telugu,True,0.95,9.955,0.007,True,,
+what is the minimum balance for a savings account,general,general,True,english,english,True,0.97,9.706,,,True,0.136
+what types of savings accounts does the bank offer,general,general,True,english,english,True,0.97,8.768,,,True,0.031
+is there a penalty for not maintaining minimum balance,general,general,True,english,english,True,0.96,9.751,,,False,0.03
+what happens if I miss 3 EMI payments in a row,general,general,True,english,english,True,0.95,9.854,,,True,0.037
+can I prepay my loan early without penalty,general,general,True,english,english,True,0.95,9.708,,,True,0.013
+what is the EMI bounce charge,general,general,True,english,english,True,0.95,8.912,,,True,0.023
+what is the interest rate on a 1 year fixed deposit,general,general,True,english,english,True,0.98,9.838,,,True,0.038
+what is the home loan interest rate,general,general,True,english,english,True,0.97,9.757,,,True,0.037
+do senior citizens get extra interest on FD,general,general,True,english,english,True,0.96,1.736,,,True,0.034
+what is the late fee on credit card payment,general,general,True,english,english,True,0.96,9.773,,,True,0.033
+what is the minimum amount due on my credit card,general,general,True,english,english,True,0.98,8.82,,,True,0.012
+how do I activate internet banking,general,general,True,english,english,True,0.95,8.838,,,True,0.012
+what is the daily transaction limit on mobile banking,general,general,True,english,english,True,0.98,2.621,,,True,0.02
+"my internet banking got locked, how do I unlock it",general,general,True,english,english,True,0.95,8.738,,,True,0.03
+what is the ATM withdrawal limit per day,general,general,True,english,english,True,0.96,2.522,,,True,0.038
+how do I report a lost debit card,general,general,True,english,english,True,0.96,2.66,,,True,0.039
+is there an annual fee on the credit card,general,general,True,english,english,True,0.96,2.43,,,True,0.025
+what is the minimum amount to open a fixed deposit,general,general,True,english,english,True,0.97,10.054,,,True,0.029
+can I break my FD before maturity,general,general,True,english,english,True,0.97,1.606,,,True,0.021
+what is the daily UPI transaction limit,general,general,True,english,english,True,0.95,1.875,,,False,0.034
+how long does NEFT take to process,general,general,True,english,english,True,0.96,1.693,,,True,0.026
+what is the minimum amount for RTGS transfer,general,general,True,english,english,True,0.98,8.836,,,True,0.025
+what documents are needed for KYC,general,general,True,english,english,True,0.95,2.881,,,True,0.029
+can I open an account online without visiting the branch,general,general,True,english,english,True,0.97,1.563,,,False,0.039
+how do I file a complaint with the bank,general,escalate,False,english,english,True,0.95,1.061,,,True,0.02
+how many days does it take to resolve a complaint,general,general,True,english,english,True,0.97,4.322,,,True,0.037
+savings account ke liye minimum balance kitna hai,general,general,True,hindi,hinglish,False,0.95,9.396,,,True,0.043
+fixed deposit interest rate kitna hai 1 saal ke liye,general,general,True,hinglish,hinglish,True,0.95,2.926,,,True,0.017
+internet banking activate karne ka process kya hai,general,general,True,hinglish,hinglish,True,0.95,9.883,,,True,0.022
+KYC kosam ento documents kavali,general,general,True,telugu,telugu,True,0.95,3.094,,,True,0.038
+I want to speak to a representative,escalate,escalate,True,english,english,True,0.95,1.775,,,,
+connect me to customer care,escalate,escalate,True,english,english,True,0.96,9.855,,,,
+I want to report a fraud transaction on my account,escalate,escalate,True,english,english,True,0.97,1.813,,,,
+"this is unacceptable, get me a human right now",escalate,escalate,True,english,english,True,0.95,11.041,,,,
+I want to close my account,escalate,escalate,True,english,english,True,0.97,1.758,,,,
+someone stole money from my account,escalate,escalate,True,english,english,True,0.95,1.961,,,,
+I want to update my registered mobile number,escalate,escalate,True,english,english,True,0.95,1.833,,,,
+"this bot is useless, give me a real person",escalate,escalate,True,english,english,True,0.95,2.733,,,,
+I want to block my debit card immediately,escalate,escalate,True,english,english,True,0.98,9.812,,,,
+could you speak with me the customer care,escalate,escalate,True,english,english,True,0.95,8.805,,,,
+why is my account frozen,escalate,general,False,english,english,True,0.95,3.255,,,,
+can I get my loan amount increased,escalate,escalate,True,english,english,True,0.95,2.897,,,,
+why was my loan application rejected,escalate,general,False,english,english,True,0.95,3.996,,,,
+I want to open a fixed deposit for my daughter who is a minor,escalate,escalate,True,english,english,True,0.95,1.03,,,,
+your app charged me twice for the same transaction,escalate,escalate,True,english,english,True,0.95,3.987,,,,
+mujhe ek insaan se baat karni hai,escalate,escalate,True,hindi,hindi,True,0.98,9.95,,,,
+"mera paisa chori ho gaya, complaint karni hai",escalate,escalate,True,hindi,hinglish,False,0.95,2.764,,,,
+mujhe apna registered mobile number badalna hai,escalate,escalate,True,hinglish,hinglish,True,0.95,2.189,,,,
+naaku oka person tho matladali,escalate,escalate,True,telugu,telugu,True,0.95,4.849,,,,
+nenu fraud report cheyali,escalate,escalate,True,telugu,telugu,True,0.9,3.275,,,,
+hello,smalltalk,smalltalk,True,english,english,True,0.95,2.752,,,,
+hi there,smalltalk,smalltalk,True,english,english,True,0.98,8.781,,,,
+thank you so much,smalltalk,smalltalk,True,english,english,True,0.98,10.197,,,,
+how are you today,smalltalk,smalltalk,True,english,english,True,0.95,0.388,,,,
+ha ha ha ha,smalltalk,smalltalk,True,english,english,True,0.9,1.873,,,,
+what is your name,smalltalk,smalltalk,True,english,english,True,0.98,2.772,,,,
+good morning,smalltalk,smalltalk,True,english,english,True,0.98,0.548,,,,
+are you a real person or a bot,smalltalk,smalltalk,True,english,english,True,0.95,2.968,,,,
+can you tell me a joke,smalltalk,smalltalk,True,english,english,True,0.96,1.635,,,,
+namaste,smalltalk,smalltalk,True,hindi,hindi,True,0.95,1.718,,,,
+aap kaise ho,smalltalk,smalltalk,True,hindi,hindi,True,0.95,1.822,,,,
+dhanyavaad,smalltalk,smalltalk,True,hindi,hindi,True,0.97,3.0,,,,
+meeru ela unnaru,smalltalk,smalltalk,True,telugu,telugu,True,0.95,0.587,,,,
+"no that's all, thank you",exit,exit,True,english,english,True,0.98,10.776,,,,
+"nothing else, goodbye",exit,exit,True,english,english,True,0.98,8.705,,,,
+"that's all I needed, bye",exit,exit,True,english,english,True,0.95,1.638,,,,
+please end the call,exit,exit,True,english,english,True,0.95,1.486,,,,
+"I'm done, thanks",exit,exit,True,english,english,True,0.98,1.649,,,,
+"ok bye, that's it for now",exit,exit,True,english,english,True,0.98,9.861,,,,
+"bas itna hi tha, dhanyavaad",exit,exit,True,hindi,hindi,True,0.95,1.749,,,,
+"nenu ayipoyanu, thanks",exit,exit,True,telugu,telugu,True,0.98,2.181,,,,

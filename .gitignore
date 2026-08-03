@@ -2,3 +2,36 @@
 .env 
 __pycache__/ 
 *.pyc 
+
+# real secrets, never commit this, .env.example is the template that DOES get committed
+.env
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+
+# your local envs, ml_env is the conda one from pip freeze, venv/.venv covers everything else
+ml_env/
+venv/
+.venv/
+env/
+
+# editors
+.vscode/
+.idea/
+
+# os junk
+.DS_Store
+Thumbs.db
+
+# chroma stores its index on disk locally if knowledge_base.py points at a local
+# path instead of a hosted chroma instance, keeping this out just in case,
+# harmless to have even if your setup doesn't actually create this folder
+
+
+# logs
+*.log

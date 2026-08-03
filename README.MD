@@ -1,37 +1,54 @@
 <div align="center">
 
-# Banking Voice Agent with Intelligent Routing
+# Banking Voice Agent
 
-**A production-grade voice agent that understands how Indians actually speak.**
+Call it. Talk however you normally talk. It figures out what you want and answers you back, in your language, out loud.
 
-English · Hindi · Telugu · Hinglish · Tenglish — under 4 seconds per turn.
-
-[![Python](https://img.shields.io/badge/Python-3.10+-3b82f6?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Groq](https://img.shields.io/badge/LLM-Groq_LLaMA_3.1-f59e0b?style=flat-square)](https://groq.com)
-[![Vachana](https://img.shields.io/badge/STT-Vachana_by_Gnani-10b981?style=flat-square)](https://vachana.ai)
-[![ChromaDB](https://img.shields.io/badge/Vector_DB-ChromaDB-a78bfa?style=flat-square)](https://chromadb.com)
-[![License](https://img.shields.io/badge/License-MIT-muted?style=flat-square)](LICENSE)
-
-[Full visual documentation →](https://niharnandala.github.io/Banking_Voice_Agent_With_intelligent_Routing/)
+Built by Nihar Nandala
 
 </div>
 
 ---
 
-## What it does
+## Try it live
 
-Customer calls. Speaks naturally in whatever language they are comfortable in. The agent understands what they want, verifies who they are, fetches their real account data, and responds — all without menus, buttons, or hold music.
+**[add your Render URL here once it's deployed]**
 
-```
-"mera balance kya hai"          →  personal   →  DB lookup      →  Hindi response
-"how to open an account"        →  general    →  RAG search     →  policy answer  
-"address change karna hai"      →  escalate   →  ticket raised  →  staff handoff
-"i want to know EMI policies"   →  general    →  knowledge base →  spoken answer
-```
+This runs on fake seeded test data, nothing real. Use any of these customer ids to actually try the personal account flow:
+
+`CU001` `CU002` `CU003` `CU004` `CU005` `CU007`
+
+Or just ask something like "what are your interest rates" and skip the id part entirely.
 
 ---
 
-## Real session output — no edits
+## Table of contents
+
+- [What it actually does](#what-it-actually-does)
+- [A real call](#a-real-call-unedited)
+- [How it routes a request](#how-it-routes-a-request)
+- [What I picked and why](#what-i-picked-and-why)
+- [Bugs that only showed up once this was live](#bugs-that-only-showed-up-once-this-was-live)
+- [What's actually not handled yet](#whats-actually-not-handled-yet)
+- [Run it yourself](#run-it-yourself)
+- [File layout](#file-layout)
+
+---
+
+## What it actually does
+
+```
+"mera balance kya hai"          →  personal    →  db lookup       →  hindi reply
+"how to open an account"        →  general     →  rag search      →  policy answer
+"address change karna hai"      →  escalate    →  ticket raised   →  human takes over
+"i want to know emi policies"   →  general     →  knowledge base  →  spoken answer
+```
+
+Four intents. Personal, general, escalate, smalltalk. One model reads what you said, picks a lane, and a different piece of code handles it from there.
+
+---
+
+## A real call, unedited
 
 ```
 bot:   Hello, welcome to XYZ Bank. Ask me anything about your account.
@@ -42,246 +59,204 @@ user:  mera balance kya hai
 bot:   Please tell me your customer id.
 
 user:  my customer id is cu 007
-       customer_id: CU007 · verified in DB · data fetched
+       verified in db, data fetched
 
 bot:   Dhanyawad sir. Aapka balance 1.5 lakh rupees hai.
 
 user:  could you get me some bank emi policies
        intent: general, confidence: 0.80
-       kept 5 chunks after drop detection
 
 bot:   EMI har mahine 5 ko automatically deducted hota hai sir.
        Bounce charge 500 rupees per instance hai.
 
 user:  i want to change my bank account
        intent: escalate, confidence: 0.85
-       ESCALATION TICKET RAISED · ticket: 43A5E499
+       ticket raised: 43A5E499
 
 bot:   I have raised a ticket for you sir. Staff will contact you shortly.
 ```
 
-**Real latency from the same session**
+---
 
-| Stage | Time |
-|---|---|
-| Intent classification | 0.0s |
-| Customer ID extraction | 0.0s |
-| Knowledge base search | 0.0s |
-| Answer generation | 0.0s |
-| Bot speaking | 2.8s to 3.4s |
-| Full turn end to end | under 4 seconds |
+## How it routes a request
+
+```mermaid
+flowchart TD
+    A[user speaks] --> B[classify_intent via Groq]
+    B --> C{what did they mean}
+    C -->|personal| D[check customer id]
+    D --> E[fetch account from postgres]
+    E --> F[answer using their real data]
+    C -->|general| G[search knowledge base]
+    G --> H[answer using bank policy]
+    C -->|escalate| I[raise ticket]
+    I --> J[human takes over]
+    C -->|smalltalk| K[reset and re greet]
+    C -->|exit| L[end call]
+```
 
 ---
 
-## How it works
+## What I picked and why
 
-![Flow diagram](assets/flow.svg)
-
-
-
----
-
-## Intent routing in detail
-
-![Routing diagram](assets/routing.svg)
----
-
-## Why these tools
-
-| Decision | Chosen | Rejected | Reason |
+| Piece | Using | Skipped | Why |
 |---|---|---|---|
-| Speech to Text | Vachana by Gnani.ai | Whisper, Azure Speech | Trained on 1M+ hours of Indian voice data across BFSI. Generic models fail on code-switching and broken speech. |
-| LLM Inference | Groq + LLaMA 3.1 8B | OpenAI GPT-4, Gemini | Sub-100ms inference. 3 to 5x faster than OpenAI. Zero cost. |
-| Vector Search | ChromaDB local | Pinecone, Weaviate | Runs on disk. Loads once. No API cost. No network dependency. |
-| ID Extraction | LLM prompt | Regex | "see you zero zero one", "c u 001" — callers say IDs in ways regex cannot handle. LLM reads intent not characters. |
-| Retrieval cutoff | Dynamic drop detection | Fixed threshold | Fixed 0.7 threshold is unreliable across models. Drop detection adapts to the shape of scores instead. |
+| Speech to text | Vachana by Gnani.ai | Whisper, Azure | Trained on Indian voice data specifically. Handles code switching. |
+| LLM | Groq running gpt oss 120b | llama 3.1 8b (started here) | The small model kept mistaking normal Indian English for Hindi. Bigger model reasons better, and llama 3.1 8b is getting retired anyway. |
+| Vector search | ChromaDB, local | Pinecone, Weaviate | No API bill, no network to go down, loads once. |
+| Id extraction | LLM prompt | Regex | People say ids like "see you zero zero one" out loud. Regex can't parse that. |
+| Retrieval cutoff | Dynamic drop detection | Fixed 0.7 threshold | A flat number works on one dataset and fails on another. This looks at the shape of the scores instead. |
+| Database | Postgres on Neon, pooled | One shared connection (started here) | One connection meant every balance check waited in line behind the last one. Pool lets them run at the same time. |
 
-### Dynamic drop detection explained
+**Drop detection in one picture:**
 
 ```
 scores:   0.91   0.89   0.85   0.61   0.58
 gaps:            0.02   0.04   0.24   0.03
-                               ↑
-                        gap of 0.24 is bigger than threshold 0.15
-                        cut here — keep first 3, discard the rest
+                               ^
+                        gap of 0.24 beats threshold 0.15
+                        cut here, keep the first 3
 ```
-
-A fixed threshold of 0.7 would have kept everything above it regardless of whether it was actually relevant. Drop detection keeps only what is clearly better than everything that follows it.
 
 ---
 
-## Production bugs fixed
-
-These do not appear in tutorials. They only show up when you actually run this.
+## Bugs that only showed up once this was live
 
 <details>
-<summary><strong>Thread-unsafe audio queue</strong></summary>
+<summary>One shared db connection was quietly making everyone wait</summary>
 
-sounddevice fires `mic_callback` on its own OS thread. `asyncio.Queue` is not thread safe. Calling `put_nowait` directly from that thread while the event loop is doing a `get` causes silent data corruption — audio drops, occasional crashes, never reproducible consistently.
+Every personal question hit the same single `psycopg2` connection. A connection can only run one query at a time, so under real traffic, balance checks queued up one by one even though nothing looked broken.
+
+Fixed with a connection pool. Borrow a connection, use it, give it back.
 
 ```python
-# wrong — audio thread touches queue directly
-audio_queue.put_nowait(indata[:, 0].copy())
-
-# correct — audio thread asks event loop to do it
-_main_loop.call_soon_threadsafe(audio_queue.put_nowait, indata[:, 0].copy())
+conn = db_conn.getconn()
+try:
+    cursor = conn.cursor()
+    cursor.execute(query)
+finally:
+    db_conn.putconn(conn)
 ```
 </details>
 
 <details>
-<summary><strong>TTS completion sync — bot was hearing itself</strong></summary>
+<summary>Circular imports between the router and the handlers</summary>
 
-Old code fired `Speak()` and returned instantly. Mic reopened while the bot was still talking. Bot transcribed its own voice as a new user question.
+The intent router needs the handlers. The handlers need a function back from the router. Import both at the top of each file and python gets stuck loading them.
 
-Fix: unique marker written to PowerShell stdout after each `Speak()`. Code blocks reading stdout until marker appears. Mic only opens after speech is confirmed done.
+Fixed by importing that one function inside the function body where it's actually used, not at the top of the file.
 </details>
 
 <details>
-<summary><strong>Infinite recursion between personal handler and intent classifier</strong></summary>
+<summary>Failed id check could loop forever</summary>
 
-Failed customer ID → back to intent classifier → back to ID handler → repeat forever. No exit condition.
+Wrong customer id sent things back to the classifier, which sent it back to the id handler, which asked again, forever.
 
-Fix: `retry_count` passed through every call and incremented on each bounce. After 3 failures the system escalates to a human instead of looping.
+Fixed with a retry count that travels with the conversation. Three misses and it escalates to a human instead of asking a fourth time.
 </details>
 
 <details>
-<summary><strong>listen_once hang in async for loop</strong></summary>
+<summary>LLM JSON kept breaking the parser</summary>
 
-In `listen_once` mode, `receive()` sat blocked inside `async for event in stream` with nothing to wake it once `done` was set. The entire listening session would hang indefinitely.
+Told to return only json, the model would sometimes wrap it in a code fence or toss in a sentence first. A plain `json.loads()` dies on that.
 
-Fix: `send_audio`, `receive`, and `done.wait` run as separate tasks raced with `asyncio.wait(FIRST_COMPLETED)`. Whatever is still running gets explicitly cancelled.
-</details>
-
-<details>
-<summary><strong>Circular imports</strong></summary>
-
-`llm_intent.py` imports handlers. Handlers need `run_intent` from `llm_intent.py`. Top-level import causes Python to get stuck mid-load — A imports B, B imports A, A is still loading.
-
-Fix: import `run_intent` inside the function body only, never at module level in handler files.
-</details>
-
-<details>
-<summary><strong>LLM JSON parsing crashes</strong></summary>
-
-LLMs told to return only JSON sometimes wrap it in markdown fences or add a sentence before it. Raw `json.loads` crashes on this and kills the call.
-
-Fix: shared `safe_parse_json` in `utils.py` strips backtick fences, strips json label, tries to parse, falls back to a safe default on failure. Used everywhere.
+Fixed with one shared parser that strips the fence, strips the word json if it snuck in, tries to parse, and falls back to something safe if it still fails.
 </details>
 
 ---
 
-## File structure
+## What's actually not handled yet
 
-```
-llm_intent.py              entry point · main loop · intent router
-vachana_stt/
-    vachana.py             mic input · STT streaming · TTS output · silence detection · 20s timeout
-handlers/
-    personal.py            customer id extraction · DB lookup · account answers
-    general.py             knowledge base search · policy answers
-    escalate.py            ticket generation · staff handoff
-    smalltalk.py           conversation reset · bot reintroduction
-scripts/
-    queries.py             DB functions · customer data fetch · id validation
-knowledge_base.py          ChromaDB search · embedding · dynamic drop detection
-utils/
-    utils.py               safe JSON parser · markdown cleaner · shared helpers
-connections/
-    connections.py         API keys · DB connection · audio queue
-```
+Being straight about this instead of letting you find out mid demo.
+
+- Sessions live in memory on whatever instance created them. Fine running as one process. Scale to more than one and a caller can land on an instance that never saw them before.
+- The db pool is per instance too. Three instances means three separate pools hitting Neon, not one shared pool of five.
+- No otp or email check. Customer id against the database is the only identity gate right now.
+- No automated test suite. `eval_full.py` checks accuracy and latency against a labeled set, it's not the same thing as unit tests.
+- A local only playback path exists for testing on my own machine (`speak()` in `vachana_tts.py`). Needs a real audio device, never runs on the deployed server.
 
 ---
 
-## This pipeline works for any industry
-
-The core — multilingual STT, intent routing, RAG retrieval, spoken response — is domain agnostic. Swap the knowledge base and DB schema. Everything else stays.
-
-| Industry | What changes | Business value |
-|---|---|---|
-| Healthcare | Patient DB + symptom knowledge base | Appointment booking and prescription reminders in local language 24x7 |
-| Logistics | Shipment DB + delivery policy docs | Zero hold time for tracking and rescheduling calls |
-| E-commerce | Order DB + returns policy | Handles the 80% of routine calls so human agents handle the 20% that matter |
-| Government | Scheme DB + eligibility docs | Reaches Tier 2 and 3 cities in Hindi and Telugu — only way to reach those users |
-| Telecom | Subscriber DB + plan docs | Plan queries, balance checks, complaint escalation without a call centre |
-
----
-
-## Roadmap
-
-**Done**
-- Voice pipeline end to end
-- Intent classification in English, Hindi, Telugu, Hinglish, Tenglish
-- Personal queries with customer ID extraction and DB lookup
-- RAG pipeline with dynamic drop detection
-- Escalation with ticket generation and conversation summary
-- 20 second silence timeout
-- Error handling across all layers
-- Customer ID validation against DB
-
-**In progress**
-- Vachana TTS to replace Windows system voice — email sent to Gnani, waiting for API access
-- ChromaDB warm start from session begin to eliminate cold start delay
-- Response naturalness improvements
-
-**Planned**
-- FastAPI layer for deployment as a service
-- Docker containerisation
-- Structured call logging
-- Latency and intent accuracy monitoring
-- OTP verification layer
-
----
-
-## Honest tradeoffs
-
-**No OTP or email verification** — customer ID validated against DB is the current identity gate. OTP is on the roadmap but out of scope for this version.
-
-**No paid LLMs** — LLaMA 3.1 8B on Groq handles everything. Fast enough for real-time voice. Zero cost to run.
-
-**Windows only TTS** — PowerShell System.Speech for now. Vachana TTS will make this platform agnostic once API access lands.
-
-**ChromaDB cold start** — first general query of a session adds a few seconds while the embedding model loads. Fixing this by warming from startup regardless of query type.
-
----
-
-## Quick start
+## Run it yourself
 
 ```bash
-pip install sounddevice numpy groq chromadb sentence-transformers mysql-connector-python gnani-stt
+pip install -r requirements.txt
 ```
 
-Set up `connections/connections.py`
+`connections/connections.py` needs:
 
 ```python
-import asyncio, groq, mysql.connector
+import os
+from psycopg2 import pool
+from groq import Groq
+from dotenv import load_dotenv
+load_dotenv()
 
-VACHANA_API_KEY = "your_vachana_key"
-audio_queue     = asyncio.Queue()
-groq_client     = groq.Groq(api_key="your_groq_key")
-db_conn         = mysql.connector.connect(
-    host="localhost", user="your_user",
-    password="your_password", database="your_db"
+groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+db_conn = pool.ThreadedConnectionPool(
+    1, 5,
+    host     = os.environ.get("DB_HOST"),   # use the pooled Neon endpoint
+    database = os.environ.get("DB_NAME"),
+    user     = os.environ.get("DB_USER"),
+    password = os.environ.get("DB_PASSWORD"),
+    port     = os.environ.get("DB_PORT"),
+    sslmode  = "require"
 )
 ```
 
-Build the knowledge base — run once, saves to disk
+Build the knowledge base once:
 
 ```bash
-python knowledge_base.py
+python scripts/knowledge_base.py
 ```
 
-Start the agent
+Seed the test customers:
 
 ```bash
-python llm_intent.py
+python scripts/setup_database.py
+```
+
+Start it:
+
+```bash
+uvicorn app:app --reload
+```
+
+Or with Docker:
+
+```bash
+docker build -t banking voice agent .
+docker run -p 8000:8000 --env file .env banking voice agent
+```
+
+---
+
+## File layout
+
+```
+app.py                    fastapi entry, sessions, /chat /speak /session /health
+llm_intent.py             intent + language classifier, routes to a handler
+handlers/
+    personal.py             id check, db lookup, account answers
+    general.py               knowledge base search, policy answers
+    escalate.py               ticket generation, human handoff
+    smalltalk.py               resets the conversation
+scripts/
+    queries.py               db functions
+    knowledge_base.py         chromadb search, embeddings, drop detection
+utils/
+    utils.py                  safe json parsing, speech cleanup
+connections/
+    connections.py            api keys, pooled db connection, groq client
+vachana_stt/
+    vachana_tts.py             streaming and full file tts for the browser
 ```
 
 ---
 
 <div align="center">
 
-Built by **Nihar Nandala**
-
-[GitHub](https://github.com/niharnandala) · [Full visual docs](https://niharnandala.github.io/Banking_Voice_Agent_With_intelligent_Routing/)
+[GitHub](https://github.com/niharnandala)
 
 </div>

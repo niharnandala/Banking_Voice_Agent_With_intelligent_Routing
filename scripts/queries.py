@@ -6,11 +6,13 @@ from connections.connections import db_conn
 
 
 def get_customer_full_data(customer_id):
+    conn = db_conn.getconn()          # borrow a connection from the pool
+
     # i wrapped everything in try/except because the database could be down
     # or the connection could have timed out or the query itself could fail
     # without this one DB error crashes the entire customer call
     try:
-        cursor = db_conn.cursor()
+        cursor = conn.cursor()
         # cursor is my pen to read and write to the database
         # i create a fresh one every time instead of reusing
         # because cursors are not safe to share across operations
@@ -66,13 +68,16 @@ def get_customer_full_data(customer_id):
         # if anything failed i print what went wrong for debugging
         # and return None so the caller handles it gracefully
         # instead of the whole program crashing
-
+    finally:
+        db_conn.putconn(conn)         # always give it back
 
 def validate_customer_id(customer_id):
+    conn = db_conn.getconn()          # borrow a connection from the pool
+
     # i wrapped this in try/except for the same reason as above
     # if my DB is down i want to return False safely not crash
     try:
-        cursor = db_conn.cursor()
+        cursor = conn.cursor()
 
         cursor.execute("""
             SELECT customer_id FROM customers
@@ -94,6 +99,9 @@ def validate_customer_id(customer_id):
         return False
         # i return False if DB is down — safer than assuming valid
         # better to say id not found than let an unverified customer through
+    finally:
+        db_conn.putconn(conn)         # always give it back
+
 
 
 if __name__ == "__main__":

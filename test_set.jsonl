@@ -1,0 +1,99 @@
+{"message": "what is my account balance", "intent": "personal", "language": "english", "customer_id": "CU001"}
+{"message": "what is my current EMI amount", "intent": "personal", "language": "english", "customer_id": "CU001"}
+{"message": "when is my EMI due", "intent": "personal", "language": "english", "customer_id": "CU002"}
+{"message": "what is my loan outstanding amount", "intent": "personal", "language": "english", "customer_id": "CU002"}
+{"message": "what type of account do I have", "intent": "personal", "language": "english", "customer_id": "CU003"}
+{"message": "is my account active right now", "intent": "personal", "language": "english", "customer_id": "CU003"}
+{"message": "what is the minimum balance in my account", "intent": "personal", "language": "english", "customer_id": "CU004"}
+{"message": "what is my loan status", "intent": "personal", "language": "english", "customer_id": "CU004"}
+{"message": "how much is my principal loan amount", "intent": "personal", "language": "english", "customer_id": "CU005"}
+{"message": "what is my registered phone number", "intent": "personal", "language": "english", "customer_id": "CU005"}
+{"message": "what is my registered email address", "intent": "personal", "language": "english", "customer_id": "CU007"}
+{"message": "what kind of loan do I have", "intent": "personal", "language": "english", "customer_id": "CU007"}
+{"message": "correct bank balance in my account please", "intent": "personal", "language": "english", "customer_id": "CU001"}
+{"message": "kindly do the needful and tell me my EMI due date", "intent": "personal", "language": "english", "customer_id": "CU002"}
+{"message": "mera account balance kya hai", "intent": "personal", "language": "hindi", "customer_id": "CU003"}
+{"message": "mera EMI kab due hai", "intent": "personal", "language": "hindi", "customer_id": "CU004"}
+{"message": "mera loan status kya hai", "intent": "personal", "language": "hindi", "customer_id": "CU005"}
+{"message": "mera phone number kya hai registered", "intent": "personal", "language": "hindi", "customer_id": "CU007"}
+{"message": "can you check mera balance please", "intent": "personal", "language": "hinglish", "customer_id": "CU001"}
+{"message": "please check karke batao mera EMI amount", "intent": "personal", "language": "hinglish", "customer_id": "CU002"}
+{"message": "mujhe mera loan outstanding amount batao", "intent": "personal", "language": "hinglish", "customer_id": "CU005"}
+{"message": "naaku na account balance cheppandi", "intent": "personal", "language": "telugu", "customer_id": "CU003"}
+{"message": "naaku loan status enti cheppandi", "intent": "personal", "language": "telugu", "customer_id": "CU004"}
+{"message": "naaku na EMI eppudu due avuthundi cheppandi", "intent": "personal", "language": "telugu", "customer_id": "CU007"}
+
+{"message": "what is the minimum balance for a savings account", "intent": "general", "language": "english", "expected_section": "Account Types and Minimum Balance"}
+{"message": "what types of savings accounts does the bank offer", "intent": "general", "language": "english", "expected_section": "Account Types and Minimum Balance"}
+{"message": "is there a penalty for not maintaining minimum balance", "intent": "general", "language": "english", "expected_section": "Account Types and Minimum Balance"}
+{"message": "what happens if I miss 3 EMI payments in a row", "intent": "general", "language": "english", "expected_section": "EMI and Loan Repayment"}
+{"message": "can I prepay my loan early without penalty", "intent": "general", "language": "english", "expected_section": "EMI and Loan Repayment"}
+{"message": "what is the EMI bounce charge", "intent": "general", "language": "english", "expected_section": "EMI and Loan Repayment"}
+{"message": "what is the interest rate on a 1 year fixed deposit", "intent": "general", "language": "english", "expected_section": "Interest Rates"}
+{"message": "what is the home loan interest rate", "intent": "general", "language": "english", "expected_section": "Interest Rates"}
+{"message": "do senior citizens get extra interest on FD", "intent": "general", "language": "english", "expected_section": "Interest Rates"}
+{"message": "what is the late fee on credit card payment", "intent": "general", "language": "english", "expected_section": "Late Payment Charges"}
+{"message": "what is the minimum amount due on my credit card", "intent": "general", "language": "english", "expected_section": "Late Payment Charges"}
+{"message": "how do I activate internet banking", "intent": "general", "language": "english", "expected_section": "Internet and Mobile Banking"}
+{"message": "what is the daily transaction limit on mobile banking", "intent": "general", "language": "english", "expected_section": "Internet and Mobile Banking"}
+{"message": "my internet banking got locked, how do I unlock it", "intent": "general", "language": "english", "expected_section": "Internet and Mobile Banking"}
+{"message": "what is the ATM withdrawal limit per day", "intent": "general", "language": "english", "expected_section": "Debit and Credit Card"}
+{"message": "how do I report a lost debit card", "intent": "general", "language": "english", "expected_section": "Debit and Credit Card"}
+{"message": "is there an annual fee on the credit card", "intent": "general", "language": "english", "expected_section": "Debit and Credit Card"}
+{"message": "what is the minimum amount to open a fixed deposit", "intent": "general", "language": "english", "expected_section": "Fixed Deposits"}
+{"message": "can I break my FD before maturity", "intent": "general", "language": "english", "expected_section": "Fixed Deposits"}
+{"message": "what is the daily UPI transaction limit", "intent": "general", "language": "english", "expected_section": "Fund Transfers"}
+{"message": "how long does NEFT take to process", "intent": "general", "language": "english", "expected_section": "Fund Transfers"}
+{"message": "what is the minimum amount for RTGS transfer", "intent": "general", "language": "english", "expected_section": "Fund Transfers"}
+{"message": "what documents are needed for KYC", "intent": "general", "language": "english", "expected_section": "KYC and Account Opening"}
+{"message": "can I open an account online without visiting the branch", "intent": "general", "language": "english", "expected_section": "KYC and Account Opening"}
+{"message": "how do I file a complaint with the bank", "intent": "general", "language": "english", "expected_section": "Grievance and Escalation"}
+{"message": "how many days does it take to resolve a complaint", "intent": "general", "language": "english", "expected_section": "Grievance and Escalation"}
+{"message": "savings account ke liye minimum balance kitna hai", "intent": "general", "language": "hindi", "expected_section": "Account Types and Minimum Balance"}
+{"message": "fixed deposit interest rate kitna hai 1 saal ke liye", "intent": "general", "language": "hinglish", "expected_section": "Interest Rates"}
+{"message": "internet banking activate karne ka process kya hai", "intent": "general", "language": "hinglish", "expected_section": "Internet and Mobile Banking"}
+{"message": "KYC kosam ento documents kavali", "intent": "general", "language": "telugu", "expected_section": "KYC and Account Opening"}
+
+{"message": "I want to speak to a representative", "intent": "escalate", "language": "english"}
+{"message": "connect me to customer care", "intent": "escalate", "language": "english"}
+{"message": "I want to report a fraud transaction on my account", "intent": "escalate", "language": "english"}
+{"message": "this is unacceptable, get me a human right now", "intent": "escalate", "language": "english"}
+{"message": "I want to close my account", "intent": "escalate", "language": "english"}
+{"message": "someone stole money from my account", "intent": "escalate", "language": "english"}
+{"message": "I want to update my registered mobile number", "intent": "escalate", "language": "english"}
+{"message": "this bot is useless, give me a real person", "intent": "escalate", "language": "english"}
+{"message": "I want to block my debit card immediately", "intent": "escalate", "language": "english"}
+{"message": "could you speak with me the customer care", "intent": "escalate", "language": "english"}
+{"message": "why is my account frozen", "intent": "escalate", "language": "english"}
+{"message": "can I get my loan amount increased", "intent": "escalate", "language": "english"}
+{"message": "why was my loan application rejected", "intent": "escalate", "language": "english"}
+{"message": "I want to open a fixed deposit for my daughter who is a minor", "intent": "escalate", "language": "english"}
+{"message": "your app charged me twice for the same transaction", "intent": "escalate", "language": "english"}
+{"message": "mujhe ek insaan se baat karni hai", "intent": "escalate", "language": "hindi"}
+{"message": "mera paisa chori ho gaya, complaint karni hai", "intent": "escalate", "language": "hindi"}
+{"message": "mujhe apna registered mobile number badalna hai", "intent": "escalate", "language": "hinglish"}
+{"message": "naaku oka person tho matladali", "intent": "escalate", "language": "telugu"}
+{"message": "nenu fraud report cheyali", "intent": "escalate", "language": "telugu"}
+
+{"message": "hello", "intent": "smalltalk", "language": "english"}
+{"message": "hi there", "intent": "smalltalk", "language": "english"}
+{"message": "thank you so much", "intent": "smalltalk", "language": "english"}
+{"message": "how are you today", "intent": "smalltalk", "language": "english"}
+{"message": "ha ha ha ha", "intent": "smalltalk", "language": "english"}
+{"message": "what is your name", "intent": "smalltalk", "language": "english"}
+{"message": "good morning", "intent": "smalltalk", "language": "english"}
+{"message": "are you a real person or a bot", "intent": "smalltalk", "language": "english"}
+{"message": "can you tell me a joke", "intent": "smalltalk", "language": "english"}
+{"message": "namaste", "intent": "smalltalk", "language": "hindi"}
+{"message": "aap kaise ho", "intent": "smalltalk", "language": "hindi"}
+{"message": "dhanyavaad", "intent": "smalltalk", "language": "hindi"}
+{"message": "meeru ela unnaru", "intent": "smalltalk", "language": "telugu"}
+
+{"message": "no that's all, thank you", "intent": "exit", "language": "english"}
+{"message": "nothing else, goodbye", "intent": "exit", "language": "english"}
+{"message": "that's all I needed, bye", "intent": "exit", "language": "english"}
+{"message": "please end the call", "intent": "exit", "language": "english"}
+{"message": "I'm done, thanks", "intent": "exit", "language": "english"}
+{"message": "ok bye, that's it for now", "intent": "exit", "language": "english"}
+{"message": "bas itna hi tha, dhanyavaad", "intent": "exit", "language": "hindi"}
+{"message": "nenu ayipoyanu, thanks", "intent": "exit", "language": "telugu"}

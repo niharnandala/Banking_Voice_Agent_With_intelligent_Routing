@@ -1,0 +1,35 @@
+# built this by actually going through every file one by one
+# app.py, connections.py, llm_intent.py, personal.py, general.py,
+# vachana_tts.py, escalate.py, smalltalk.py, knowledge_base.py
+# and listing only what they actually import, not everything sitting in ml_env
+# versions here are pinned to what pip freeze showed is already working
+# on my machine right now, not just whatever latest happens to be
+
+fastapi==0.135.2
+uvicorn[standard]==0.42.0
+pydantic>=2,<3
+# left this one unpinned to an exact patch version unlike everything else here
+# my local freeze showed it as a conda built local wheel path with no plain
+# version number in it that i could actually confirm
+# fastapi 0.135.2 needs pydantic 2.x anyway so this range is safe
+# without me guessing a patch number i cant back up with real evidence
+python-dotenv==1.2.2
+psycopg2-binary==2.9.12
+groq==1.5.0
+numpy==1.26.4
+
+chromadb==1.5.9
+sentence-transformers==5.6.0
+gnani-vachana==0.5.3
+# pinned on purpose, not letting this float to latest
+# gnani's own docs mention needing 0.7.3 or higher for their newer plugins
+# but 0.5.3 is what i actually tested against vachana_tts.py's exact calls
+# if i ever bump this i need to retest tts before trusting it in prod
+
+# torch, sentence-transformers pulls this in on its own as a dependency
+# a plain pip install torch on linux grabs the cuda build by default
+# thats huge and pointless since render's free tier has no gpu anyway
+# installing from pytorch's own cpu only wheel index keeps the image
+# small and the build fast, requirements.txt supports this directly
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.12.1

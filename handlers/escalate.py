@@ -1,12 +1,16 @@
 import uuid
 import datetime
-from vachana_stt.vachana import speak
 # i import uuid to generate a unique ticket id for each escalation
-# datetime to timestamp when the ticket was raised
-# speak to tell the customer their ticket id out loud
+# i import datetime to timestamp exactly when the ticket was raised
+# no vachana import here — escalate returns text, app handles delivery
 
 
-async def handle_escalate(conversation_history, user_text):
+async def handle_escalate(conversation, text):
+
+    history = conversation["history"]
+    state   = conversation["state"]
+    # i pull these out once at the top so i dont keep writing
+    # conversation["history"] and conversation["state"] everywhere
 
     ticket = {
         "ticket_id" : str(uuid.uuid4())[:8].upper(),
@@ -16,17 +20,15 @@ async def handle_escalate(conversation_history, user_text):
 
         "time"      : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         # i format the timestamp as a readable string
-        # strftime lets me control the exact format
 
-        "issue"     : user_text,
+        "issue"     : text,
         # i store exactly what the user said so staff knows the issue
 
-        "summary"   : _summarize_history(conversation_history)
-        # i include a short summary of the conversation
+        "summary"   : _summarize_history(history)
+        # i include a short summary of the last few conversation turns
         # so staff has full context when they pick up the ticket
     }
 
-    # i print the ticket in the terminal so staff can see it
     print("\n" + "=" * 50)
     print("ESCALATION TICKET RAISED")
     print("=" * 50)
@@ -35,9 +37,21 @@ async def handle_escalate(conversation_history, user_text):
     print(f"  issue      : {ticket['issue']}")
     print(f"  summary    : {ticket['summary']}")
     print("=" * 50 + "\n")
+    # i print the full ticket to the terminal so staff can see it
+    # in production this would write to a database or ticketing system
 
-    await speak(f"I have raised a ticket for you. Your ticket id is {ticket['ticket_id']}. A staff member will contact you shortly.")
-    # i read the ticket id out loud so the customer has a reference number
+    history.append({
+        "role"    : "assistant",
+        "content" : f"escalation ticket raised: {ticket['ticket_id']}"
+    })
+    # i add the ticket to history so there is a record in the conversation
+
+    return {
+        "response" : f"I have raised a ticket for you sir. Your ticket ID is {ticket['ticket_id']}. A staff member will contact you shortly.",
+        "ticket"   : ticket
+        # i return the full ticket object too
+        # so the app can store it, display it, or forward it to staff systems
+    }
 
 
 def _summarize_history(conversation_history):

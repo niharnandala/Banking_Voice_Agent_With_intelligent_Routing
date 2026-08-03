@@ -1,4 +1,4 @@
-from connections import db_conn
+from connections.connections import db_conn
 
 # ============================================================
 # WHAT THIS FILE DOES
@@ -8,7 +8,8 @@ from connections import db_conn
 # creates three tables: customers, accounts, loans
 # safe to run again — IF NOT EXISTS prevents errors on re-run
 
-cursor = db_conn.cursor()
+conn = db_conn.getconn()
+cursor = conn.cursor()
 
 
 # ============================================================
@@ -125,7 +126,8 @@ print("loans inserted!")
 # ============================================================
 # STEP 5 — SAVE CHANGES
 # ============================================================
-db_conn.commit()
+conn.commit()          # ← was db_conn.commit(), now commit on the actual connection
 cursor.close()
+db_conn.putconn(conn)  # give it back at the very end
 
 print("\nall tables created and test data inserted successfully!")

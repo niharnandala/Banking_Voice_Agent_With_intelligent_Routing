@@ -1,0 +1,50 @@
+# secrets — never let these into the build context
+.env
+.env.*
+!.env.example
+
+# version control
+.git
+.gitignore
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# virtual envs — yours is named ml_env, but covering common names too
+ml_env/
+venv/
+.venv/
+env/
+
+# editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+
+# docker itself
+Dockerfile
+.dockerignore
+
+
+# node, in case any tooling drops this in (frontend-design tools, etc)
+node_modules/
+
+# tests, docs — optional, drop these two lines if you want them in the image
+tests/
+docs/
