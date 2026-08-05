@@ -16,11 +16,10 @@ Built by Nihar Nandala
 
 **[full build notes, bugs and all →](ENGINEERING.md)**
 
-<img src="assets/img1.png" alt="Banking Voice Agent screenshot" width="700">
 
 https://github.com/user-attachments/assets/235f395f-43f0-465a-a93a-697416c0d638
 
-**[▶ watch the demo video](https://drive.google.com/file/d/1iRFWrVh8Go262TinqsGVLbgLa5nKBTIG/view?usp=sharing)**
+
 
 </div>
 
