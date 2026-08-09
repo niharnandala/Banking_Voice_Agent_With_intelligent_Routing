@@ -1,11 +1,12 @@
 #langgraph-version
 
-
+from langgraph.graph import StateGraph, START, END
 import sys
 import os
 import time
 from utils.prompt_loader import load_prompt
 import asyncio
+from typing import TypedDict
 
 
 
@@ -22,6 +23,19 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from connections.connections import groq_client
 from utils.utils import safe_parse_json
+
+
+
+class State(TypedDict):
+    history:str
+    waiting_for:str
+    handler:str
+    intent:str
+    confidence:float
+    language:str
+    classified_this_turn:bool
+
+
 
 
 llm_intent_prompt = """
@@ -239,6 +253,8 @@ async def classify_intent(chat_history):
     return safe_parse_json(raw, fallback)
 
 
+
+
 async def run_intent(conversation, text):
 
     history = conversation["history"]
@@ -363,3 +379,9 @@ async def run_intent(conversation, text):
         return {
             "response": "I'm not sure I understood that. Could you please repeat or rephrase?"
         }
+
+
+
+
+    def classify_intent_node(state:State):
+    result = classify_intent(history)
