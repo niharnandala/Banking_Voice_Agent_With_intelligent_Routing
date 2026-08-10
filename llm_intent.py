@@ -1,41 +1,21 @@
-#langgraph-version
-
-from langgraph.graph import StateGraph, START, END
 import sys
 import os
 import time
 from utils.prompt_loader import load_prompt
 import asyncio
-from typing import TypedDict
+from typing import TypedDict, Optional
 
-
+from langgraph.graph import StateGraph, START, END
+from langchain_groq import ChatGroq
+from langchain_core.messages import SystemMessage, HumanMessage
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# fixed: this used to append .../llm_intent_dir/handlers (the handlers folder
-# itself) to sys.path, but "from handlers.personal import ..." below needs
-# the PARENT of handlers/ on the path, not handlers/ itself
-# this only "worked" before because the project root was already on sys.path
-# some other way (e.g. running "python app.py" from that folder) — if this
-# file is ever imported from a different working directory, the old line
-# would not have helped at all
-# now this appends the actual project root (this file's own directory),
-# which is what "handlers.personal" style imports actually need
+# this appends the project root, this file's own directory, onto sys.path
+# handlers.personal style imports below need the parent of handlers/ on
+# the path, not handlers/ itself
 
 from connections.connections import groq_client
 from utils.utils import safe_parse_json
-
-
-
-class State(TypedDict):
-    history:str
-    waiting_for:str
-    handler:str
-    intent:str
-    confidence:float
-    language:str
-    classified_this_turn:bool
-
-
 
 
 llm_intent_prompt = """
@@ -201,7 +181,7 @@ Never inflate confidence.
 
 
 CONFIDENCE_THRESHOLD = 0.7
-# i set this to 0.7 meaning LLM needs to be at least 70% sure
+# the classifier needs to be at least 70% sure before i trust its intent
 # i use >= not > so exactly 0.7 also counts as confident enough
 
 MAX_RETRIES = 3
@@ -210,42 +190,56 @@ MAX_RETRIES = 3
 
 MAX_SMALLTALK = 3
 # i stop greeting the user after 3 consecutive smalltalk messages
-# and escalate — something is clearly wrong if they keep sending unrelated messages
+# and escalate, something is clearly wrong if they keep sending unrelated messages
+
+
+classifier_llm = ChatGroq(
+    model   = "openai/gpt-oss-120b",
+    api_key = groq_client.api_key
+)
+# this is the langchain wrapper around the same groq model and the same
+# key connections.py already loads for groq_client, i just hand it to
+# ChatGroq instead of calling the raw sdk client directly for this one call
+# the sdk client itself stays untouched so personal.py and general.py keep
+# working exactly as they already do
+
+
+class ConversationState(TypedDict):
+    history      : list
+    state        : dict
+    text         : str
+    timings      : list
+    last_intent  : dict
+    last_active  : float
+    response     : Optional[dict]
+    intent       : Optional[str]
+    confidence   : Optional[float]
+# this is the shape of the same conversation dict app.py already stores
+# per session, i am not introducing a second parallel state, the graph
+# just operates directly on it
+# intent and confidence are scratch fields the classify node fills in and
+# the router right after it reads, nothing downstream needs them once
+# routing is decided
 
 
 async def classify_intent(chat_history):
     history_text = "\n".join(f"{m['role']}: {m['content']}" for m in chat_history)
     print(history_text)
-    # fixed: this used to be print({history_text}) which wraps the string in
-    # a set literal and prints a messy one-item set repr instead of the
-    # plain text — this just prints it cleanly now
 
     start = time.time()
     try:
-        response = await asyncio.to_thread( 
-            groq_client.chat.completions.create,
-                model    = "openai/gpt-oss-120b",
-                # swapped from llama-3.1-8b-instant to a bigger model here
-                # the 8b model kept misreading unusual-but-fully-English phrasing
-                # as Hindi typed in Roman letters, and also adding Telugu detection
-                # on top needs more reasoning depth than an 8b model reliably has
-                # gpt-oss-120b is also not on Groq's deprecation list, unlike
-                # llama-3.1-8b-instant which is being shut down mid-August 2026
-                messages = [
-                    {"role": "system", "content": llm_intent_prompt},
-                    {"role": "user",   "content": history_text}
-                ]
-        )
-        raw = response.choices[0].message.content
+        response = await classifier_llm.ainvoke([
+            SystemMessage(content=llm_intent_prompt),
+            HumanMessage(content=history_text)
+        ])
+        raw = response.content
 
     except Exception as e:
         print(f"[error] classify_intent LLM call failed: {e}")
         return {"intent": "smalltalk", "confidence": 0.0, "language": "english"}
-    # i chose smalltalk with 0.0 confidence as fallback
-    # 0.0 is below my threshold so it falls into the
-    # "not sure, could you repeat" branch which is the safest response
-    # language defaults to english here too since there's nothing to detect
-    # language from if the LLM call itself failed
+    # smalltalk with 0.0 confidence is the fallback here
+    # 0.0 sits below the threshold so this falls into the uncertain branch
+    # which is the safest response when the classifier itself is unreachable
 
     print(f"[timing] intent classification: {time.time() - start:.2f}s")
 
@@ -253,68 +247,57 @@ async def classify_intent(chat_history):
     return safe_parse_json(raw, fallback)
 
 
+async def check_waiting_node(conversation: ConversationState) -> ConversationState:
+    return conversation
+# this node does no work on its own, it exists purely so the graph has a
+# real entry point to hang the waiting/classify branch off of, the actual
+# decision happens in route_from_waiting right below
 
 
-async def run_intent(conversation, text):
-
-    history = conversation["history"]
-    state   = conversation["state"]
-    # i pull these out once at the top so i dont keep writing
-    # conversation["history"] and conversation["state"] everywhere below
-
-    history.append({"role": "user", "content": text})
-    # i add the user message to history immediately
-    # this way every handler and every LLM call sees the full conversation
-    # including what the user just said
+def route_from_waiting(conversation: ConversationState) -> str:
+    state = conversation["state"]
 
     if state["waiting_for"] is not None:
-        # i always check this before calling the intent LLM
-        # if another handler is already waiting for input
-        # there is no reason to spend another LLM call deciding intent again
-        # i just send the message straight to whoever was waiting
-        # note: state["language"] is NOT re-detected on this branch — it stays
-        # whatever it was the last time classify_intent actually ran for this
-        # personal request, before the id back-and-forth started. that's
-        # intentional: we want to answer in the language of the customer's
-        # actual question, not whatever language the id-reading-out-loud
-        # turn happened to be in
+        # another handler is already waiting on the customer's next reply
+        # there is no reason to spend an llm call deciding intent again
+        # the message goes straight to whoever asked for it
 
         if state["handler"] == "personal":
             if "last_intent" in conversation:
                 conversation["last_intent"]["classified_this_turn"] = False
-                # no fresh classify_intent call happens on this branch (that's
-                # the whole point of "waiting_for"), so the metrics panel
-                # shouldn't present the previous turn's numbers as if they're
-                # new — this just flags them as carried over from before
-            from handlers.personal import handle_personal
-            return await handle_personal(conversation)
+                # no fresh classify_intent call happens on this branch, so
+                # the metrics panel should not present the previous turn's
+                # numbers as if they are new, this flags them as carried over
+            return "personal"
 
-        # i can add more waiting handlers here as the project grows
-        # eg if state["handler"] == "escalate": ...
+        # more waiting handlers slot in here as the project grows
+        # eg if state["handler"] == "escalate": return "escalate"
 
-    # nobody is waiting for anything
-    # this is a fresh new request so i classify the intent
+    return "classify"
 
+
+async def classify_node(conversation: ConversationState) -> ConversationState:
     print("[intent] classifying...")
 
-    _classify_start = time.time()
+    history = conversation["history"]
+
+    start      = time.time()
     result     = await classify_intent(history)
-    _classify_time  = time.time() - _classify_start
+    elapsed    = time.time() - start
     intent     = result.get("intent",     "smalltalk")
     confidence = result.get("confidence", 0.0)
     language   = result.get("language",   "english")
-    # i use .get() with defaults not result["intent"]
-    # because if the key is missing .get() gives me the default
-    # and result["intent"] would throw a KeyError and crash
+    # .get() with defaults means a missing key falls back safely instead
+    # of throwing a KeyError
 
-    state["language"] = language
+    conversation["state"]["language"] = language
     # every fresh classification saves the detected language onto state
-    # this is what personal.py and general.py now read instead of each
-    # running their own separate language-detection prompt rule
+    # this is what personal.py and general.py read instead of running
+    # their own separate language detection
 
     conversation.setdefault("timings", []).append({
         "label"   : "intent_classification",
-        "seconds" : round(_classify_time, 3)
+        "seconds" : round(elapsed, 3)
     })
     conversation["last_intent"] = {
         "intent"               : intent,
@@ -322,66 +305,151 @@ async def run_intent(conversation, text):
         "language"             : language,
         "classified_this_turn" : True
     }
-    # additive bookkeeping only, for a frontend metrics panel — nothing
-    # about the routing logic below reads or depends on these two lines.
-    # app.py reads conversation["timings"] and conversation["last_intent"]
-    # after run_intent returns and attaches them to the /chat response
+    # bookkeeping only, for the frontend metrics panel, app.py reads
+    # conversation["timings"] and conversation["last_intent"] after
+    # run_intent returns and attaches them to the /chat response
+
+    conversation["intent"]     = intent
+    conversation["confidence"] = confidence
+    # scratch fields the router right after this node reads, nothing
+    # downstream of routing needs them again
 
     print(f"[intent] {intent}, confidence: {confidence}, language: {language}\n")
+    return conversation
+
+
+def route_after_classify(conversation: ConversationState) -> str:
+    state      = conversation["state"]
+    intent     = conversation.get("intent")
+    confidence = conversation.get("confidence", 0.0)
 
     if intent == "exit" and confidence >= CONFIDENCE_THRESHOLD:
-        # i check exit first before everything else
-        # returning this dict signals app.py to clean up the session
-        state["smalltalk_count"] = 0
-        return {"response": "exit"}
+        # exit gets checked first, before everything else
+        return "exit"
 
-    elif intent == "personal" and confidence >= CONFIDENCE_THRESHOLD:
+    if intent == "personal" and confidence >= CONFIDENCE_THRESHOLD:
         state["smalltalk_count"] = 0
-        # i reset smalltalk counter whenever a real banking question comes in
+        # a real banking question resets the smalltalk counter
 
         if state["retry_count"] >= MAX_RETRIES:
-            # user has failed to give a valid id too many times
-            # i reset everything and escalate to a human
+            # the customer already failed to give a valid id too many
+            # times, everything resets and this goes to a human instead
             state["retry_count"] = 0
             state["handler"]     = None
             state["waiting_for"] = None
-            from handlers.escalate import handle_escalate
-            return await handle_escalate(conversation, text)
+            return "escalate"
 
-        from handlers.personal import handle_personal
-        return await handle_personal(conversation)
+        return "personal"
 
-    elif intent == "general" and confidence >= CONFIDENCE_THRESHOLD:
+    if intent == "general" and confidence >= CONFIDENCE_THRESHOLD:
         state["smalltalk_count"] = 0
-        from handlers.general import handle_general
-        return await handle_general(conversation, text)
-        # i import inside the if block not at the top of the file
-        # this is lazy importing — knowledge_base only loads
-        # if a general question actually comes in during this call
+        return "general"
 
-    elif intent == "smalltalk" and confidence >= CONFIDENCE_THRESHOLD:
-        from handlers.smalltalk import handle_smalltalk
-        return await handle_smalltalk(conversation)
-        # i used to bump state["smalltalk_count"] right here AND handle_smalltalk
-        # bumped it again on its own — that meant MAX_SMALLTALK = 3 was actually
-        # escalating after only 2 real smalltalk turns, not 3
-        # now handle_smalltalk owns the counter completely, this just calls it
+    if intent == "smalltalk" and confidence >= CONFIDENCE_THRESHOLD:
+        return "smalltalk"
 
-    elif intent == "escalate" and confidence >= CONFIDENCE_THRESHOLD:
+    if intent == "escalate" and confidence >= CONFIDENCE_THRESHOLD:
         state["smalltalk_count"] = 0
-        from handlers.escalate import handle_escalate
-        return await handle_escalate(conversation, text)
+        return "escalate"
 
-    else:
-        # this catches anything below the confidence threshold
-        # the app just shows this message and waits for the next input
-        state["smalltalk_count"] = 0
-        return {
-            "response": "I'm not sure I understood that. Could you please repeat or rephrase?"
-        }
+    # anything below the confidence threshold lands here
+    state["smalltalk_count"] = 0
+    return "uncertain"
 
 
+async def personal_node(conversation: ConversationState) -> ConversationState:
+    from handlers.personal import handle_personal
+    conversation["response"] = await handle_personal(conversation)
+    return conversation
 
 
-    def classify_intent_node(state:State):
-    result = classify_intent(history)
+async def general_node(conversation: ConversationState) -> ConversationState:
+    from handlers.general import handle_general
+    conversation["response"] = await handle_general(conversation, conversation["text"])
+    return conversation
+    # imported inside the node, not at the top of the file, this is lazy
+    # importing, knowledge_base only loads if a general question actually
+    # comes in during this call
+
+
+async def smalltalk_node(conversation: ConversationState) -> ConversationState:
+    from handlers.smalltalk import handle_smalltalk
+    conversation["response"] = await handle_smalltalk(conversation)
+    return conversation
+
+
+async def escalate_node(conversation: ConversationState) -> ConversationState:
+    from handlers.escalate import handle_escalate
+    conversation["response"] = await handle_escalate(conversation, conversation["text"])
+    return conversation
+
+
+async def exit_node(conversation: ConversationState) -> ConversationState:
+    conversation["state"]["smalltalk_count"] = 0
+    conversation["response"] = {"response": "exit"}
+    # this exact return value signals app.py to clean up and close the session
+    return conversation
+
+
+async def uncertain_node(conversation: ConversationState) -> ConversationState:
+    conversation["response"] = {
+        "response": "I'm not sure I understood that. Could you please repeat or rephrase?"
+    }
+    return conversation
+
+
+graph = StateGraph(ConversationState)
+
+graph.add_node("check_waiting", check_waiting_node)
+graph.add_node("classify",      classify_node)
+graph.add_node("personal",      personal_node)
+graph.add_node("general",       general_node)
+graph.add_node("smalltalk",     smalltalk_node)
+graph.add_node("escalate",      escalate_node)
+graph.add_node("exit",          exit_node)
+graph.add_node("uncertain",     uncertain_node)
+
+graph.add_edge(START, "check_waiting")
+
+graph.add_conditional_edges(
+    "check_waiting",
+    route_from_waiting,
+    {
+        "personal" : "personal",
+        "classify" : "classify"
+    }
+)
+
+graph.add_conditional_edges(
+    "classify",
+    route_after_classify,
+    {
+        "exit"      : "exit",
+        "personal"  : "personal",
+        "general"   : "general",
+        "smalltalk" : "smalltalk",
+        "escalate"  : "escalate",
+        "uncertain" : "uncertain"
+    }
+)
+
+graph.add_edge("personal",  END)
+graph.add_edge("general",   END)
+graph.add_edge("smalltalk", END)
+graph.add_edge("escalate",  END)
+graph.add_edge("exit",      END)
+graph.add_edge("uncertain", END)
+
+intent_graph = graph.compile()
+
+
+async def run_intent(conversation, text):
+    conversation["text"] = text
+    conversation["history"].append({"role": "user", "content": text})
+    # the user message goes into history immediately, this way every
+    # handler and every llm call downstream sees the full conversation
+    # including what the customer just said
+
+    final_state = await intent_graph.ainvoke(conversation)
+
+    return final_state["response"]
