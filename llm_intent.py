@@ -446,10 +446,16 @@ intent_graph = graph.compile()
 async def run_intent(conversation, text):
     conversation["text"] = text
     conversation["history"].append({"role": "user", "content": text})
-    # the user message goes into history immediately, this way every
-    # handler and every llm call downstream sees the full conversation
-    # including what the customer just said
+    conversation.setdefault("timings", [])
+    # pre-seed timings on the real object before the graph runs — langgraph
+    # mutates existing lists in place fine, but a list created fresh
+    # inside classify_node would not reach this object
 
     final_state = await intent_graph.ainvoke(conversation)
 
-    return final_state["response"]
+    if "last_intent" in final_state:
+        conversation["last_intent"] = final_state["last_intent"]
+        # last_intent gets reassigned wholesale in classify_node, not
+        # mutated in place, so this copies it back explicitly
+
+    return final_state.get("response")
