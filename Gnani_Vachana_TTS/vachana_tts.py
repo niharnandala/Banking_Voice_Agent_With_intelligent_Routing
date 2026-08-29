@@ -22,10 +22,12 @@ from connections.connections import VACHANA_API_KEY, VACHANA_TTS
 # i only import it inside _play_audio() which only ever runs on my local machine
 
 
-VOICE = "Riya"
+VOICE = "Devika"
 # i chose Riya Female voice
 # fits a banking assistant naturally
 # other options are Pranav Male, Kaveri Female, Shubhra Female, Deepak Male
+MODEL = "timbre-v2.5"
+LANGUAGE = "en-IN"
 
 SAMPLE_RATE = 44100
 # i use 44100 for full quality audio
@@ -145,15 +147,14 @@ async def stream_audio(text):
             async for chunk in client.synthesize(
                 text,
                 voice=VOICE,
+                model=MODEL,
+                language=LANGUAGE,
                 audio_config=AudioConfig(
                     sample_rate=SAMPLE_RATE,
                     num_channels=NUM_CHANNELS,
                     sample_width=SAMPLE_WIDTH,
                     encoding="linear_pcm",
                     container="raw"
-                    # raw PCM chunks with no headers
-                    # browser Web Audio API handles raw int16 PCM directly
-                    # no WAV header needed because we are not building a file
                 )
             ):
                 if first_chunk:
